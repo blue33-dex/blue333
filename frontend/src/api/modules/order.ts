@@ -24,6 +24,8 @@ export interface OrderBrief {
   created_at: string
   material_task_count?: number
   latest_task_status?: string
+  /** BO 退回记录（存在即表示该订单曾被退回，AM 端需展示退回原因并支持重新提交）*/
+  reject_reason?: { reject_reason_type: string; remark: string; rejected_by: string }
 }
 
 export interface OrderDetail extends OrderBrief {

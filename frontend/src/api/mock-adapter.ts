@@ -11,6 +11,7 @@
  */
 import { mockService } from './mock-data'
 import type { ApiResponse } from './http'
+import type { Priority } from '../types/enums'
 
 interface MockRequest {
   url: string
@@ -36,6 +37,22 @@ function extractParam(url: string, pattern: RegExp): string | undefined {
   return m?.[1]
 }
 
+/** 业务错误 → HTTP 状态映射（业务错误不能以 HTTP 200 + SUCCESS 返回）*/
+function errorResult(code: string, message: string): { status: number; body: ApiResponse } {
+  const status =
+    code === 'ORDER_NOT_FOUND' || code === 'TASK_NOT_FOUND'
+      ? 404
+      : code === 'VALIDATION_ERROR'
+      ? 422
+      : 409 // INVALID_STATE_TRANSITION 等状态冲突
+  return { status, body: { code, message } }
+}
+
+/** 判断业务方法返回值是否为错误对象 */
+function isMockError(r: unknown): r is { error: string; message?: string } {
+  return !!r && typeof r === 'object' && 'error' in (r as Record<string, unknown>)
+}
+
 /** Mock Adapter 主入口 */
 export async function mockAdapter(config: {
   url?: string
@@ -47,10 +64,21 @@ export async function mockAdapter(config: {
   // 模拟延迟 200~800ms
   await new Promise((r) => setTimeout(r, 200 + Math.random() * 600))
 
+  // 关键：axios 在调用 custom adapter 前会把 data 序列化成 JSON 字符串
+  // 这里统一反序列化为对象后再交给路由分发
+  let parsedData: unknown = config.data
+  if (typeof parsedData === 'string') {
+    try {
+      parsedData = JSON.parse(parsedData)
+    } catch {
+      // 不是合法 JSON，保持原样
+    }
+  }
+
   const req: MockRequest = {
     url: config.url || '',
     method: normalizeMethod(config.method || 'get'),
-    data: config.data,
+    data: parsedData,
     params: config.params,
   }
 
@@ -108,15 +136,18 @@ function route(req: MockRequest): { status: number; body: ApiResponse } {
   if (req.method === 'GET') {
     const reviewId = extractParam(req.url, /\/orders\/(\d+)\/review$/)
     if (reviewId) {
-      return { status: 200, body: wrap(mockService.getOrderDetail(reviewId)) }
+      const detail = mockService.getOrderDetail(reviewId)
+      if (!detail) return { status: 404, body: { code: 'ORDER_NOT_FOUND', message: '订单不存在' } }
+      return { status: 200, body: wrap(detail) }
     }
   }
   // POST /orders/{id}/submit
   if (req.method === 'POST') {
     const submitId = extractParam(req.url, /\/orders\/(\d+)\/submit$/)
     if (submitId) {
-      mockService.submitOrder(submitId)
-      return { status: 200, body: wrap({ orderId: submitId, status: 'PENDING_CONFIRM' }) }
+      const result = mockService.submitOrder(submitId)
+      if (isMockError(result)) return errorResult(result.error, result.message || '提交失败')
+      return { status: 200, body: wrap(result) }
     }
   }
   // POST /orders/{id}/reject
@@ -124,15 +155,22 @@ function route(req: MockRequest): { status: number; body: ApiResponse } {
     const rejectId = extractParam(req.url, /\/orders\/(\d+)\/reject$/)
     if (rejectId) {
       const payload = req.data as { reject_reason_type?: string; remark?: string } | undefined
-      mockService.rejectOrder(rejectId, payload)
-      return { status: 200, body: wrap({ orderId: rejectId, status: 'PENDING_CONFIRM' }) }
+      const result = mockService.rejectOrder(rejectId, payload)
+      if (isMockError(result)) return errorResult(result.error, result.message || '退回失败')
+      return { status: 200, body: wrap(result) }
     }
   }
   // POST /orders/{id}/assign
   if (req.method === 'POST') {
     const assignId = extractParam(req.url, /\/orders\/(\d+)\/assign$/)
     if (assignId) {
-      const result = mockService.assignTask(assignId, req.data as any)
+      const result = mockService.assignTask(assignId, req.data as {
+        assignee_id?: number
+        assignee_name?: string
+        task_deadline?: string
+        priority?: Priority
+      })
+      if (isMockError(result)) return errorResult(result.error, result.message || '派发失败')
       return { status: 200, body: wrap(result) }
     }
   }
@@ -143,7 +181,11 @@ function route(req: MockRequest): { status: number; body: ApiResponse } {
   }
   if (req.method === 'GET') {
     const taskId = extractParam(req.url, /\/material-tasks\/(\d+)$/)
-    if (taskId) return { status: 200, body: wrap(mockService.getTaskDetail(taskId)) }
+    if (taskId) {
+      const task = mockService.getTaskDetail(taskId)
+      if (!task) return { status: 404, body: { code: 'TASK_NOT_FOUND', message: '物料任务不存在' } }
+      return { status: 200, body: wrap(task) }
+    }
   }
 
   // === 未匹配 → 404 ===

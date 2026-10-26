@@ -80,7 +80,13 @@ http.interceptors.response.use(
   async (err: unknown) => {
     // 401 → 自动 refresh（非 auth 接口）
     const axiosErr = err as { response?: { status?: number }; config?: { url?: string; headers?: Record<string, string> } }
-    if (axiosErr.response?.status === 401) {
+
+    // 关键：认证端点（login / refresh）返回 401 是正常的业务错误（密码错 / token 失效），
+    // 不应触发全局 refresh → 重定向逻辑，否则登录页输入错误密码会被强制跳 /login
+    const noAuthPaths = ['/auth/login', '/auth/refresh']
+    const isAuthRequest = noAuthPaths.some((p) => axiosErr.config?.url?.startsWith(p))
+
+    if (axiosErr.response?.status === 401 && !isAuthRequest) {
       const authStore = useAuthStore()
       if (!authStore.refreshToken) {
         authStore.clearAuth()
