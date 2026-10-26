@@ -5,6 +5,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { orderApi, type OrderBrief } from '../../api/modules/order'
 import OrderStatusTag from '../../components/common/OrderStatusTag.vue'
+import { OrderStatus } from '../../types/enums'
 
 const router = useRouter()
 const orders = ref<OrderBrief[]>([])
@@ -68,7 +69,14 @@ onMounted(loadOrders)
           >
             <td class="mono">{{ o.order_no }}</td>
             <td>{{ o.customer_name }}</td>
-            <td><OrderStatusTag :status="o.status" /></td>
+            <td>
+              <OrderStatusTag :status="o.status" />
+              <span
+                v-if="o.status === OrderStatus.PENDING_CONFIRM && o.reject_reason"
+                class="rejected-flag"
+                :title="o.reject_reason.remark"
+              >已退回待补充</span>
+            </td>
             <td>{{ o.delivery_deadline }}</td>
             <td class="muted">{{ o.created_at }}</td>
           </tr>
@@ -113,6 +121,11 @@ onMounted(loadOrders)
 }
 .list-table tbody tr.clickable-row:hover { background: #f5f7fa; }
 .mono { font-family: Menlo, Consolas, monospace; color: #409eff; }
+.rejected-flag {
+  display: inline-block; margin-left: 6px; padding: 1px 6px;
+  font-size: 12px; color: #f56c6c; background: #fef0f0;
+  border: 1px solid #fbc4c4; border-radius: 3px;
+}
 .muted { color: #999; }
 .empty, .global-err { padding: 20px 0; text-align: center; color: #999; }
 .global-err { color: #f56c6c; background: #fef0f0; border-radius: 4px; padding: 10px; }

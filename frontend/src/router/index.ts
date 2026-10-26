@@ -100,42 +100,39 @@ const router = createRouter({
   routes,
 })
 
-/** beforeEach 守卫 */
-router.beforeEach((to, _from, next) => {
+/** beforeEach 守卫（Vue Router 5 推荐 return 风格，替代已弃用的 next()）*/
+router.beforeEach((to) => {
   const authStore = useAuthStore()
   const requiresAuth = to.meta.requiresAuth !== false
+  // 有效会话 = 有 token 且能确定角色；角色缺失视为无效会话（fail-closed）
+  const hasValidSession = authStore.isLoggedIn && !!authStore.primaryRole
 
   // 未登录 → 登录页
-  if (requiresAuth && !authStore.isLoggedIn) {
-    next({ path: '/login', query: { redirect: to.fullPath } })
-    return
+  if (requiresAuth && !hasValidSession) {
+    return { path: '/login', query: { redirect: to.fullPath } }
   }
 
-  // 已登录但无权限访问登录页 → 按角色跳转首页
-  if (to.path === '/login' && authStore.isLoggedIn) {
+  // 已登录但访问登录页 → 按角色跳转首页
+  if (to.path === '/login' && hasValidSession) {
     switch (authStore.primaryRole) {
       case RoleType.AM:
-        next('/am/orders/create')
-        return
+        return '/am/orders/create'
       case RoleType.BO:
-        next('/bo/review')
-        return
+        return '/bo/review'
       case RoleType.DS:
-        next('/ds/tasks')
-        return
+        return '/ds/tasks'
     }
   }
 
   // 角色守卫
   const allowedRoles = to.meta.roles as RoleType[] | undefined
-  if (allowedRoles && authStore.primaryRole) {
-    if (!allowedRoles.includes(authStore.primaryRole)) {
-      next('/403')
-      return
+  if (allowedRoles) {
+    if (!authStore.primaryRole || !allowedRoles.includes(authStore.primaryRole)) {
+      return '/403'
     }
   }
 
-  next()
+  return true
 })
 
 export default router

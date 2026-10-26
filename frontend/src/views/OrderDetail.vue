@@ -147,6 +147,25 @@ async function handleAssign() {
   }
 }
 
+// --- AM 退回后重新提交（A-03，状态机 PENDING_CONFIRM → PENDING_CONFIRM）---
+const resubmitting = ref(false)
+const resubmitError = ref('')
+const resubmitDone = ref(false)
+async function handleResubmit() {
+  resubmitting.value = true
+  resubmitError.value = ''
+  resubmitDone.value = false
+  try {
+    await orderApi.submitOrder(orderId.value)
+    resubmitDone.value = true
+    await load()
+  } catch (e: any) {
+    resubmitError.value = e?.message || '重新提交失败'
+  } finally {
+    resubmitting.value = false
+  }
+}
+
 // --- AM 返回列表 ---
 function backToList() {
   if (auth.primaryRole === RoleType.AM) router.push('/am/orders')
@@ -233,6 +252,25 @@ onMounted(load)
           </li>
         </ul>
         <p v-else class="muted">（无附件。附件上传功能 P1-T26 待后端就绪后接入）</p>
+      </section>
+
+      <!-- AM 退回后重新提交（PRD 状态机：BO 退回 → AM 补充后重新提交）-->
+      <section
+        v-if="auth.primaryRole === RoleType.AM && detail.status === OrderStatus.PENDING_CONFIRM && detail.reject_reason"
+        class="card action-card"
+      >
+        <h2>退回处理</h2>
+        <p class="muted">
+          业务负责人已退回该订单，请按上方"上次退回"说明补充信息后重新提交。
+          重新提交后订单回到业务负责人待审阅队列，不会新建订单。
+        </p>
+        <p v-if="resubmitError" class="err">{{ resubmitError }}</p>
+        <p v-if="resubmitDone" class="ok">已重新提交，等待业务负责人审阅。</p>
+        <div class="btn-row">
+          <button class="btn primary" :disabled="resubmitting" @click="handleResubmit">
+            {{ resubmitting ? '提交中…' : '重新提交订单' }}
+          </button>
+        </div>
       </section>
 
       <!-- BO 操作区 -->
@@ -374,6 +412,7 @@ onMounted(load)
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .err { color: #f56c6c; font-size: 13px; margin: 6px 0 0; }
+.ok { color: #67c23a; font-size: 13px; margin: 6px 0 0; }
 .muted { color: #999; font-size: 13px; }
 .muted.tiny { font-size: 12px; margin-top: 8px; }
 .global-err { color: #f56c6c; background: #fef0f0; border-radius: 4px; padding: 10px; }
