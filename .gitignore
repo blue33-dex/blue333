@@ -1,0 +1,94 @@
+# ==========================================
+# 根目录 .gitignore · 单笔宣传物料订单管控系统
+# ==========================================
+# 规则：前端 node_modules/dist 由 frontend/.gitignore 处理
+#       backend 构建产物由 backend/.gitignore（后续创建）处理
+#       本文件覆盖根目录通用忽略项
+
+# ------- IDE / Editor -------
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.iml
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# ------- OS -------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ------- 构建产物 -------
+build/
+dist/
+out/
+target/
+
+# ------- 依赖 -------
+node_modules/
+.pnp
+.pnp.js
+
+# ------- 日志 -------
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------- 环境变量 · 密钥 · 敏感信息（永不提交）-------
+.env
+.env.*
+!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.key
+*.pem
+*.crt
+*.p12
+*.jks
+*.keystore
+id_rsa
+id_ecdsa
+id_ed25519
+*.token
+secrets/
+certificates/
+
+# ------- 数据库 -------
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+*.ldb
+*.rdb
+*.sdb
+
+# ------- Docker 临时文件 -------
+docker-compose.override.yml
+.docker/
+
+# ------- 后端 Spring Boot -------
+backend/build/
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+!backend/.mvn/wrapper/maven-wrapper.properties
+
+# ------- MinIO 本地数据 -------
+data/
+minio-data/
+ordermgmt-mysql-data/
+ordermgmt-minio-data/
+
+# ------- 临时文件 -------
+*.tmp
+*.bak
+*.swp
+*~
+.DS_Store

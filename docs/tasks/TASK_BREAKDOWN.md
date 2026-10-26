@@ -15,7 +15,7 @@
 |---|---|---|---|---|
 | CONFLICT-01 | **releaseVersion 是否立即将 MaterialTask 置为 APPROVED** | A-11 写"放行后物料任务状态 → APPROVED" | §3.3.3 明确要求"APPROVED = BO 放行 + 客户确认两步；AM 客户确认后才触发 MaterialTask → APPROVED" | **以 PRD 为准**。BO releaseVersion 仅触发 VersionStatus → RELEASED，MaterialTask 保持 PENDING_APPROVAL；AM confirmVersion 才是 MaterialTask → APPROVED 触发点 |
 | CONFLICT-02 | **canMarkCompleted 校验条件** | 未显式描述 | §3.2.3 要求"该订单下所有物料任务均为 APPROVED 状态"方可 COMPLETED | **严格 `count(status=APPROVED) == 总任务数`**，不能用"无活跃态"近似（若有 CANCELLED 任务，整单不可 COMPLETED）|
-| CONFLICT-03 | **GLOSSARY 29 个业务 API vs 实际所需** | §03 列出 29 个业务操作动词 | — | 29 个为核心业务 API；另需 **8 个补充 API**（S-01~S-08，见 §3.2），GLOSSARY 未定义但为基础设施必要 |
+| CONFLICT-03 | **GLOSSARY 29 个业务 API vs 实际所需** | §03 列出 29 个业务操作动词 | — | 29 个为核心业务 API；另需 **9 个补充 API**（S-01~S-09，见 §3.2），GLOSSARY 未定义但为基础设施必要；**合计 38 个 API** |
 
 ---
 
@@ -23,9 +23,9 @@
 
 | Phase | 核心链路 | 覆盖用户故事 | 新增实体（表） | 新增枚举 |
 |---|---|---|---|---|
-| **1** | 登记 → 审阅 → 派发 | AM-01 / AM-02 / AM-03 / BO-01 / BO-02 / BO-03 / DS-01 部分 | 11 张表 | 9 个 |
+| **1** | 登记 → 审阅 → 派发 | AM-01 / AM-02 / AM-03 / AM-04 / BO-01 / BO-02 / BO-03 / DS-01 部分 | 11 张表 | 9 个 |
 | **2** | 版本上传 → 内部评审 → 放行 | DS-01 完整 / DS-02 / DS-03 / DS-04 / BO-05 / BO-06 / DS-06 | 4 张表 | 3 个 |
-| **3** | 客户评审 → 反馈 → 确认 → 交付 | AM-04 / AM-05 / AM-06 / AM-07 / AM-08 / BO-08 / DS-05 | 4 张表 | 3 个 |
+| **3** | 客户评审 → 反馈 → 确认 → 交付 | AM-05 / AM-06 / AM-07 / AM-08 / BO-08 / DS-05 + AM-04（Phase 1 扩展） | 4 张表 | 3 个 |
 | **4** | 看板 / 时间线 / 通知强化 / 异常 | BO-04 / BO-07 + M9 通知全量 | 1 张表 | 2 个 |
 
 ---

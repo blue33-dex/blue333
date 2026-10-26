@@ -211,7 +211,7 @@ Phase 4 交付后：
 | 检查点 | 要求 |
 |---|---|
 | DB | 25 张总表 |
-| API | 29 GLOSSARY + 8 补充 + S-09 确认接口 + 待定 SSE 接口 |
+| API | 29 GLOSSARY + 9 补充（S-01~S-09）= 38 + 待定 SSE 接口 |
 | 看板 | 4 列聚合 + ≤ 1.5s + 筛选 |
 | 异常 | 手动记录 + 自动生成 + 关闭 + ArchiveOrder 前置 |
 | 取消级联 | IN_PRODUCTION → BO 取消 → 非终态 MaterialTask 全部 CANCELLED |
@@ -306,7 +306,7 @@ Phase 内部可并行：
 |---|---|---|---|
 | CONFLICT-01 | releaseVersion 是否立即触发 APPROVED | P2/P3 | **已按 PRD 定稿**：不触发，推迟 confirmVersion |
 | CONFLICT-02 | canMarkCompleted 校验条件 | P3 | **已按 PRD 定稿**：严格 count(APPROVED) == total |
-| CONFLICT-03 | GLOSSARY 29 业务 API vs 8 补充 API | 全阶段 | **已记录**：29 + 8 + S-09 = 38 端点 |
+| CONFLICT-03 | GLOSSARY 29 业务 API vs 9 补充 API | 全阶段 | **已记录**：29 + 9（S-01~S-09）= 38 端点 |
 | 待确认-01 | PDF 归档报告库（OpenPDF vs iText 7）| P3-T07 | 建议 OpenPDF，需确认授权 |
 | 待确认-02 | FeedbackItem 自动过期触发时机 | P3-T05 | 同步 markFinal vs 异步定时，建议定时 |
 | 待确认-03 | 站内通知推送方案（SSE / WebSocket / 轮询）| P4-T09 | 建议 SSE |
