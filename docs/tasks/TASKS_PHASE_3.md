@@ -2,7 +2,7 @@
 
 > **Phase 范围**：ClientReview / FeedbackItem / ConfirmationRecord / DeliveryArchive + **CONFLICT-01 / CONFLICT-02 最终兑现**
 > **核心链路**：BO 放行后（Version RELEASED）→ AM 发起客户评审 → 记录反馈 → 客户确认 → DS 标记终稿 → AM 标记已交付 → BO 归档
-> **故事覆盖**：AM-04 / AM-05 / AM-06 / AM-07 / AM-08 / BO-08 / DS-05
+> **故事覆盖**：AM-05 / AM-06 / AM-07 / AM-08 / BO-08 / DS-05 + AM-04（Phase 1 视图扩展，加评审状态 + 反馈数量列）
 > **前置条件**：Phase 2 全部完成 + P2 验收全部 PASS
 > **关键任务**：
 > - **P3-T04 为 CONFLICT-01 最终兑现点**：AM confirmVersion → MaterialTask APPROVED（MaterialTask 状态机真正进入终态）
