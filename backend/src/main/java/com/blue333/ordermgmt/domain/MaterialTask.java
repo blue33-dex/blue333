@@ -15,6 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -57,6 +58,27 @@ public class MaterialTask {
   private LocalDateTime updatedAt;
 
   protected MaterialTask() {
+  }
+
+  public static MaterialTask create(
+      Order order,
+      MaterialSpec materialSpec,
+      User assignee,
+      LocalDateTime taskDeadline,
+      Priority priority) {
+    MaterialTask task = new MaterialTask();
+    task.order = Objects.requireNonNull(order, "order must not be null");
+    task.materialSpec = Objects.requireNonNull(materialSpec, "materialSpec must not be null");
+    task.assignee = Objects.requireNonNull(assignee, "assignee must not be null");
+    task.taskDeadline = Objects.requireNonNull(taskDeadline, "taskDeadline must not be null");
+    task.priority = Objects.requireNonNull(priority, "priority must not be null");
+    task.status = MaterialTaskStatus.PENDING_DESIGN;
+    return task;
+  }
+
+  /** Changes status only after the service has validated the state transition. */
+  public void changeStatus(MaterialTaskStatus status) {
+    this.status = Objects.requireNonNull(status, "status must not be null");
   }
 
   public Long getId() { return id; }

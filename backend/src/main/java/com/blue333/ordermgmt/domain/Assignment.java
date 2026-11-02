@@ -13,11 +13,18 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
 @Table(name = "assignments")
 public class Assignment {
+  /**
+   * Kept as a controlled persistence value until Phase 2 introduces the assignment-type enum.
+   * The column is intentionally a String today to remain compatible with the existing schema.
+   */
+  public static final String INITIAL_ASSIGNMENT_TYPE = "INITIAL";
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -56,6 +63,24 @@ public class Assignment {
   private LocalDateTime createdAt;
 
   protected Assignment() {
+  }
+
+  public static Assignment initial(
+      MaterialTask task,
+      User assigner,
+      User assignee,
+      LocalDateTime taskDeadline,
+      Priority priority,
+      String remark) {
+    Assignment assignment = new Assignment();
+    assignment.task = Objects.requireNonNull(task, "task must not be null");
+    assignment.assigner = Objects.requireNonNull(assigner, "assigner must not be null");
+    assignment.assignee = Objects.requireNonNull(assignee, "assignee must not be null");
+    assignment.taskDeadline = Objects.requireNonNull(taskDeadline, "taskDeadline must not be null");
+    assignment.priority = Objects.requireNonNull(priority, "priority must not be null");
+    assignment.remark = remark;
+    assignment.assignmentType = INITIAL_ASSIGNMENT_TYPE;
+    return assignment;
   }
 
   public Long getId() { return id; }
