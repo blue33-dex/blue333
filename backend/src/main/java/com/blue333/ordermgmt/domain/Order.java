@@ -14,6 +14,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -56,6 +57,29 @@ public class Order {
   private LocalDateTime updatedAt;
 
   protected Order() {
+  }
+
+  public static Order create(
+      String orderNo,
+      String customerName,
+      String useScene,
+      LocalDate deliveryDeadline,
+      String remark,
+      User am) {
+    Order order = new Order();
+    order.orderNo = Objects.requireNonNull(orderNo, "orderNo must not be null");
+    order.customerName = Objects.requireNonNull(customerName, "customerName must not be null");
+    order.useScene = Objects.requireNonNull(useScene, "useScene must not be null");
+    order.deliveryDeadline = Objects.requireNonNull(deliveryDeadline, "deliveryDeadline must not be null");
+    order.remark = remark;
+    order.am = Objects.requireNonNull(am, "am must not be null");
+    order.status = OrderStatus.PENDING_CONFIRM;
+    return order;
+  }
+
+  /** Changes status only after the service has validated the transition. */
+  public void changeStatus(OrderStatus status) {
+    this.status = Objects.requireNonNull(status, "status must not be null");
   }
 
   public Long getId() { return id; }

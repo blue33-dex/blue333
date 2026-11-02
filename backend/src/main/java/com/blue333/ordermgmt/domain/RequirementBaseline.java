@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -59,6 +60,21 @@ public class RequirementBaseline {
   private LocalDateTime createdAt;
 
   protected RequirementBaseline() {
+  }
+
+  public static RequirementBaseline initialSnapshot(
+      Order order, User createdBy, String materialSpecsSnapshot) {
+    RequirementBaseline baseline = new RequirementBaseline();
+    baseline.order = Objects.requireNonNull(order, "order must not be null");
+    baseline.createdBy = Objects.requireNonNull(createdBy, "createdBy must not be null");
+    baseline.baselineVersion = 1;
+    baseline.customerName = order.getCustomerName();
+    baseline.useScene = order.getUseScene();
+    baseline.deliveryDeadline = order.getDeliveryDeadline();
+    baseline.remark = order.getRemark();
+    baseline.materialSpecsSnapshot = Objects.requireNonNull(materialSpecsSnapshot,
+        "materialSpecsSnapshot must not be null");
+    return baseline;
   }
 
   public Long getId() { return id; }

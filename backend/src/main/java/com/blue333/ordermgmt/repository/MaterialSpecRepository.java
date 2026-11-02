@@ -4,4 +4,5 @@ import com.blue333.ordermgmt.domain.MaterialSpec;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MaterialSpecRepository extends JpaRepository<MaterialSpec, Long> {
+  boolean existsByOrderId(Long orderId);
 }

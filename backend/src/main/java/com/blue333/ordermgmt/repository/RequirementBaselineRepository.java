@@ -4,4 +4,5 @@ import com.blue333.ordermgmt.domain.RequirementBaseline;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RequirementBaselineRepository extends JpaRepository<RequirementBaseline, Long> {
+  boolean existsByOrderId(Long orderId);
 }

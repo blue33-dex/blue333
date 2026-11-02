@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
@@ -38,6 +39,14 @@ public class MaterialSpec {
   private LocalDateTime createdAt;
 
   protected MaterialSpec() {
+  }
+
+  public static MaterialSpec create(Order order, MaterialType materialType, String specSize) {
+    MaterialSpec materialSpec = new MaterialSpec();
+    materialSpec.order = Objects.requireNonNull(order, "order must not be null");
+    materialSpec.materialType = Objects.requireNonNull(materialType, "materialType must not be null");
+    materialSpec.specSize = Objects.requireNonNull(specSize, "specSize must not be null");
+    return materialSpec;
   }
 
   public Long getId() { return id; }

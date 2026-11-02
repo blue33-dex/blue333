@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
@@ -41,6 +42,17 @@ public class Attachment {
   private LocalDateTime createdAt;
 
   protected Attachment() {
+  }
+
+  public static Attachment register(
+      Order order, String fileName, long fileSize, String storagePath, User uploadedBy) {
+    Attachment attachment = new Attachment();
+    attachment.order = Objects.requireNonNull(order, "order must not be null");
+    attachment.fileName = Objects.requireNonNull(fileName, "fileName must not be null");
+    attachment.fileSize = fileSize;
+    attachment.storagePath = Objects.requireNonNull(storagePath, "storagePath must not be null");
+    attachment.uploadedBy = Objects.requireNonNull(uploadedBy, "uploadedBy must not be null");
+    return attachment;
   }
 
   public Long getId() { return id; }
