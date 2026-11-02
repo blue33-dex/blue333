@@ -69,6 +69,8 @@ services:
       JWT_ACCESS_TOKEN_TTL_MS: ${JWT_ACCESS_TOKEN_TTL_MS:-1800000}
       JWT_REFRESH_TOKEN_TTL_MS: ${JWT_REFRESH_TOKEN_TTL_MS:-604800000}
       MINIO_ENDPOINT: http://minio:9000
+      # Browser-reachable address used in generated presigned URLs; set this to your domain in deployment.
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
       MINIO_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:?MINIO_APP_ACCESS_KEY must be set}
       MINIO_SECRET_KEY: ${MINIO_APP_SECRET_KEY:?MINIO_APP_SECRET_KEY must be set}
     ports:

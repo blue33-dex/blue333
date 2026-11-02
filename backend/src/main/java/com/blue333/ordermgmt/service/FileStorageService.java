@@ -19,11 +19,21 @@ public class FileStorageService {
   public static final long DEFAULT_GET_EXPIRY_MINUTES = 5;
   private static final long MAX_PRESIGNED_URL_EXPIRY_MINUTES = 7L * 24 * 60;
 
-  private final MinioClient minioClient;
+  private final MinioClient internalMinioClient;
+  private final MinioClient presignMinioClient;
   private final MinioProperties properties;
 
+  /** Convenience constructor for a single endpoint, retained for unit tests and non-container deployments. */
   public FileStorageService(MinioClient minioClient, MinioProperties properties) {
-    this.minioClient = minioClient;
+    this(minioClient, minioClient, properties);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public FileStorageService(@org.springframework.beans.factory.annotation.Qualifier("minioInternalClient") MinioClient internalMinioClient,
+      @org.springframework.beans.factory.annotation.Qualifier("minioPresignClient") MinioClient presignMinioClient,
+      MinioProperties properties) {
+    this.internalMinioClient = internalMinioClient;
+    this.presignMinioClient = presignMinioClient;
     this.properties = properties;
   }
 
@@ -53,7 +63,7 @@ public class FileStorageService {
   public Optional<Long> findObjectSize(String objectKey) {
     validateObjectKey(objectKey);
     try {
-      return Optional.of(minioClient.statObject(StatObjectArgs.builder()
+      return Optional.of(internalMinioClient.statObject(StatObjectArgs.builder()
           .bucket(properties.bucket()).object(objectKey).build()).size());
     } catch (ErrorResponseException exception) {
       String code = exception.errorResponse().code();
@@ -70,7 +80,7 @@ public class FileStorageService {
     validateObjectKey(objectKey);
     validateExpiry(expiryMinutes);
     try {
-      String url = minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+      String url = presignMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
           .method(method)
           .bucket(properties.bucket())
           .object(objectKey)
