@@ -57,6 +57,27 @@ public class AuditLog {
   protected AuditLog() {
   }
 
+  public static AuditLog create(
+      User operator,
+      AuditActionType actionType,
+      AuditTargetType targetType,
+      Long targetId,
+      String beforeState,
+      String afterState,
+      String result,
+      String remark) {
+    AuditLog auditLog = new AuditLog();
+    auditLog.operator = operator;
+    auditLog.actionType = actionType;
+    auditLog.targetType = targetType;
+    auditLog.targetId = targetId;
+    auditLog.beforeState = beforeState;
+    auditLog.afterState = afterState;
+    auditLog.result = result;
+    auditLog.remark = remark;
+    return auditLog;
+  }
+
   public Long getId() { return id; }
   public User getOperator() { return operator; }
   public AuditActionType getActionType() { return actionType; }
