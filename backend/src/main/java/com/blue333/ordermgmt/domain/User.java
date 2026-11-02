@@ -35,6 +35,9 @@ public class User {
   @Column(nullable = false)
   private Boolean enabled = true;
 
+  @Column(name = "token_version", nullable = false)
+  private Long tokenVersion = 0L;
+
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
@@ -53,6 +56,12 @@ public class User {
   public String getEmail() { return email; }
   public String getPhone() { return phone; }
   public Boolean getEnabled() { return enabled; }
+  public Long getTokenVersion() { return tokenVersion; }
+
+  public void incrementTokenVersion() {
+    tokenVersion++;
+  }
+
   public LocalDateTime getCreatedAt() { return createdAt; }
   public LocalDateTime getUpdatedAt() { return updatedAt; }
 }
