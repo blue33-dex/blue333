@@ -1,6 +1,7 @@
 package com.blue333.ordermgmt.domain;
 
 import com.blue333.ordermgmt.domain.enums.OrderStatus;
+import com.blue333.ordermgmt.domain.enums.RejectReasonType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -48,6 +49,20 @@ public class Order {
   @JoinColumn(name = "am_id", nullable = false)
   private User am;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "last_reject_reason_type", length = 30)
+  private RejectReasonType lastRejectReasonType;
+
+  @Column(name = "last_reject_remark", columnDefinition = "TEXT")
+  private String lastRejectRemark;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "last_rejected_by")
+  private User lastRejectedBy;
+
+  @Column(name = "last_rejected_at")
+  private LocalDateTime lastRejectedAt;
+
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
@@ -82,6 +97,18 @@ public class Order {
     this.status = Objects.requireNonNull(status, "status must not be null");
   }
 
+  /**
+   * Records the most recent rejection (BO-02). The service validates the order state and sanitizes
+   * the remark before calling this method; a later rejection overwrites the previous one.
+   */
+  public void recordRejection(
+      RejectReasonType reasonType, String remark, User rejectedBy, LocalDateTime rejectedAt) {
+    this.lastRejectReasonType = Objects.requireNonNull(reasonType, "reasonType must not be null");
+    this.lastRejectRemark = Objects.requireNonNull(remark, "remark must not be null");
+    this.lastRejectedBy = Objects.requireNonNull(rejectedBy, "rejectedBy must not be null");
+    this.lastRejectedAt = Objects.requireNonNull(rejectedAt, "rejectedAt must not be null");
+  }
+
   public Long getId() { return id; }
   public String getOrderNo() { return orderNo; }
   public String getCustomerName() { return customerName; }
@@ -90,6 +117,10 @@ public class Order {
   public String getRemark() { return remark; }
   public OrderStatus getStatus() { return status; }
   public User getAm() { return am; }
+  public RejectReasonType getLastRejectReasonType() { return lastRejectReasonType; }
+  public String getLastRejectRemark() { return lastRejectRemark; }
+  public User getLastRejectedBy() { return lastRejectedBy; }
+  public LocalDateTime getLastRejectedAt() { return lastRejectedAt; }
   public LocalDateTime getCreatedAt() { return createdAt; }
   public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

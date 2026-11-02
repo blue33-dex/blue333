@@ -4,8 +4,11 @@ import com.blue333.ordermgmt.config.MinioProperties;
 import com.blue333.ordermgmt.dto.storage.PresignedUrlResponse;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
+import io.minio.StatObjectArgs;
+import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Service;
@@ -45,6 +48,22 @@ public class FileStorageService {
 
   public PresignedUrlResponse generatePresignedGetUrl(String objectKey, long expiryMinutes) {
     return generatePresignedUrl(objectKey, expiryMinutes, Method.GET);
+  }
+
+  public Optional<Long> findObjectSize(String objectKey) {
+    validateObjectKey(objectKey);
+    try {
+      return Optional.of(minioClient.statObject(StatObjectArgs.builder()
+          .bucket(properties.bucket()).object(objectKey).build()).size());
+    } catch (ErrorResponseException exception) {
+      String code = exception.errorResponse().code();
+      if ("NoSuchKey".equals(code) || "NoSuchObject".equals(code) || "NoSuchBucket".equals(code)) {
+        return Optional.empty();
+      }
+      throw new FileStorageException("Could not inspect stored object", exception);
+    } catch (Exception exception) {
+      throw new FileStorageException("Could not inspect stored object", exception);
+    }
   }
 
   private PresignedUrlResponse generatePresignedUrl(String objectKey, long expiryMinutes, Method method) {

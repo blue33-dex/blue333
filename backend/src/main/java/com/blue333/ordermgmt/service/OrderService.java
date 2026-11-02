@@ -10,6 +10,7 @@ import com.blue333.ordermgmt.domain.User;
 import com.blue333.ordermgmt.domain.enums.AuditActionType;
 import com.blue333.ordermgmt.domain.enums.AuditTargetType;
 import com.blue333.ordermgmt.domain.enums.OrderStatus;
+import com.blue333.ordermgmt.domain.enums.RoleType;
 import com.blue333.ordermgmt.dto.order.CreateOrderCommand;
 import com.blue333.ordermgmt.dto.order.MaterialSpecCommand;
 import com.blue333.ordermgmt.dto.order.RegisterAttachmentCommand;
@@ -20,9 +21,12 @@ import com.blue333.ordermgmt.repository.AttachmentRepository;
 import com.blue333.ordermgmt.repository.MaterialSpecRepository;
 import com.blue333.ordermgmt.repository.OrderRepository;
 import com.blue333.ordermgmt.repository.RequirementBaselineRepository;
+import com.blue333.ordermgmt.repository.UserRepository;
 import com.blue333.ordermgmt.util.IdGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.context.ApplicationEventPublisher;
@@ -46,6 +50,8 @@ public class OrderService {
   private final AttachmentFilePolicyValidator attachmentFilePolicyValidator;
   private final ObjectMapper objectMapper;
   private final ApplicationEventPublisher eventPublisher;
+  private final UserRepository userRepository;
+  private final Clock clock;
 
   public OrderService(
       OrderRepository orderRepository,
@@ -56,7 +62,11 @@ public class OrderService {
       OrderStateMachine stateMachine,
       AttachmentFilePolicyValidator attachmentFilePolicyValidator,
       ObjectMapper objectMapper,
-      ApplicationEventPublisher eventPublisher) {
+      ApplicationEventPublisher eventPublisher,
+      UserRepository userRepository,
+      Clock clock) {
+    this.userRepository = userRepository;
+    this.clock = clock;
     this.orderRepository = orderRepository;
     this.materialSpecRepository = materialSpecRepository;
     this.requirementBaselineRepository = requirementBaselineRepository;
@@ -111,15 +121,22 @@ public class OrderService {
     validateSubmittable(order);
     stateMachine.transition(order, OrderStatus.PENDING_CONFIRM);
     Order savedOrder = orderRepository.save(order);
-    publishAfterCommit(new OrderSubmittedEvent(List.of(), savedOrder.getId(), savedOrder.getOrderNo()));
+    List<Long> boRecipientIds = userRepository.findEnabledIdsByRoleType(RoleType.BO);
+    publishAfterCommit(new OrderSubmittedEvent(boRecipientIds, savedOrder.getId(), savedOrder.getOrderNo()));
     return savedOrder;
   }
 
+  /**
+   * BO-02: returns an order for correction and persists the latest rejection (reason type, sanitized
+   * remark, rejecting user, time). Role authorization of {@code rejectedBy} belongs to the caller.
+   */
   @Transactional
   @AuditedAction(action = AuditActionType.REJECT_ORDER, targetType = AuditTargetType.ORDER,
-      targetId = "#command.orderId", afterState = "#result.status")
-  public Order rejectOrder(RejectOrderCommand command) {
+      targetId = "#command.orderId", afterState = "#result.status",
+      remark = "T(com.blue333.ordermgmt.service.OrderService).sanitize(#command?.remark)")
+  public Order rejectOrder(RejectOrderCommand command, User rejectedBy) {
     Objects.requireNonNull(command, "command must not be null");
+    requireActor(rejectedBy);
     Order order = findOrderForUpdate(command.orderId());
     if (order.getStatus() != OrderStatus.PENDING_CONFIRM) {
       throw new InvalidStateTransitionException("Only pending-confirmation orders can be rejected");
@@ -129,6 +146,7 @@ public class OrderService {
     }
     String remark = requireText(cleanOptional(command.remark()), "A rejection remark is required");
     stateMachine.transition(order, OrderStatus.PENDING_CONFIRM);
+    order.recordRejection(command.reasonType(), remark, rejectedBy, LocalDateTime.now(clock));
     Order savedOrder = orderRepository.save(order);
     publishAfterCommit(new OrderRejectedEvent(List.of(order.getAm().getId()), savedOrder.getId(), savedOrder.getOrderNo(),
         command.reasonType() + ": " + remark));
@@ -150,7 +168,7 @@ public class OrderService {
       throw new IllegalArgumentException("orderId must be a positive value");
     }
     return orderRepository.findByIdForUpdate(orderId)
-        .orElseThrow(() -> new IllegalArgumentException("Order does not exist: " + orderId));
+        .orElseThrow(() -> new ResourceNotFoundException("Order does not exist: " + orderId));
   }
 
   private void validateCreateCommand(CreateOrderCommand command) {
@@ -226,6 +244,11 @@ public class OrderService {
   }
 
   private String cleanOptional(String value) {
+    return sanitize(value);
+  }
+
+  /** Strips HTML tags and trims; shared by persistence and the rejection audit remark. */
+  public static String sanitize(String value) {
     return value == null ? null : HtmlUtil.cleanHtmlTag(value).trim();
   }
 

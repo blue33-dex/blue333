@@ -127,13 +127,13 @@ public class MaterialTaskService {
   private Order findOrderForUpdate(Long orderId) {
     requirePositiveId(orderId, "orderId");
     return orderRepository.findByIdForUpdate(orderId)
-        .orElseThrow(() -> new IllegalArgumentException("Order does not exist: " + orderId));
+        .orElseThrow(() -> new ResourceNotFoundException("Order does not exist: " + orderId));
   }
 
   private MaterialTask findTaskForUpdate(Long taskId) {
     requirePositiveId(taskId, "taskId");
     return materialTaskRepository.findByIdForUpdate(taskId)
-        .orElseThrow(() -> new IllegalArgumentException("Material task does not exist: " + taskId));
+        .orElseThrow(() -> new ResourceNotFoundException("Material task does not exist: " + taskId));
   }
 
   private User requirePersistedEnabledUser(User user, String label) {
@@ -141,7 +141,7 @@ public class MaterialTaskService {
       throw new IllegalArgumentException("A persisted " + label + " is required");
     }
     User persistedUser = userRepository.findById(user.getId())
-        .orElseThrow(() -> new IllegalArgumentException("User does not exist: " + user.getId()));
+        .orElseThrow(() -> new ResourceNotFoundException("User does not exist: " + user.getId()));
     if (!Boolean.TRUE.equals(persistedUser.getEnabled())) {
       throw new IllegalArgumentException("The " + label + " must be enabled");
     }
