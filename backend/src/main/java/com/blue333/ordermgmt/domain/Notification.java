@@ -55,6 +55,24 @@ public class Notification {
   protected Notification() {
   }
 
+  /** Creates a new unread notification with the required persisted fields. */
+  public static Notification create(
+      User recipient,
+      NotificationType notificationType,
+      String resourceType,
+      Long resourceId,
+      String title,
+      String content) {
+    Notification notification = new Notification();
+    notification.recipient = recipient;
+    notification.notificationType = notificationType;
+    notification.resourceType = resourceType;
+    notification.resourceId = resourceId;
+    notification.title = title;
+    notification.content = content;
+    return notification;
+  }
+
   public Long getId() { return id; }
   public User getRecipient() { return recipient; }
   public NotificationType getNotificationType() { return notificationType; }
