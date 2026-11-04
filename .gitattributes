@@ -1,0 +1,2 @@
+# Container shell scripts must keep LF line endings; CRLF breaks /bin/sh inside Linux images.
+*.sh text eol=lf

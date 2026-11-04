@@ -20,10 +20,12 @@ import com.blue333.ordermgmt.service.CurrentUser;
 import com.blue333.ordermgmt.service.CurrentUserService;
 import com.blue333.ordermgmt.service.FileStorageService;
 import com.blue333.ordermgmt.service.InvalidStateTransitionException;
+import com.blue333.ordermgmt.service.KanbanService;
 import com.blue333.ordermgmt.service.MaterialTaskService;
 import com.blue333.ordermgmt.service.OrderQueryService;
 import com.blue333.ordermgmt.service.OrderService;
 import com.blue333.ordermgmt.service.ResourceNotFoundException;
+import com.blue333.ordermgmt.service.TimelineService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -54,11 +56,13 @@ public class OrderController {
   private final AttachmentFilePolicyValidator attachmentPolicy;
   private final FileStorageService fileStorageService;
   private final UserRepository userRepository;
+  private final KanbanService kanbanService;
+  private final TimelineService timelineService;
 
   public OrderController(CurrentUserService currentUserService, AccessControlService accessControl,
       OrderService orderService, OrderQueryService orderQueryService, MaterialTaskService materialTaskService,
       AttachmentFilePolicyValidator attachmentPolicy, FileStorageService fileStorageService,
-      UserRepository userRepository) {
+      UserRepository userRepository, KanbanService kanbanService, TimelineService timelineService) {
     this.currentUserService = currentUserService;
     this.accessControl = accessControl;
     this.orderService = orderService;
@@ -67,6 +71,8 @@ public class OrderController {
     this.attachmentPolicy = attachmentPolicy;
     this.fileStorageService = fileStorageService;
     this.userRepository = userRepository;
+    this.kanbanService = kanbanService;
+    this.timelineService = timelineService;
   }
 
   @PostMapping
@@ -131,10 +137,50 @@ public class OrderController {
     return ApiResponse.page(orderQueryService.reviewQueue(cursor, limit));
   }
 
+  /** M4 BO internal-review queue: orders in production whose versions can be compared, released or rejected. */
+  @GetMapping("/internal-review-queue")
+  @PreAuthorize("hasRole('BO')")
+  public ApiResponse<List<OrderSummaryResponse>> internalReviewQueue(@RequestParam(required = false) String cursor,
+      @RequestParam(required = false) Integer limit) {
+    currentUserService.requireCurrentUser();
+    return ApiResponse.page(orderQueryService.internalReviewQueue(cursor, limit));
+  }
+
+  /** BO archive queue (A-19/A-28): delivered orders with their archive state. */
+  @GetMapping("/completed")
+  @PreAuthorize("hasRole('BO')")
+  public ApiResponse<List<OrderSummaryResponse>> completedQueue(@RequestParam(required = false) String cursor,
+      @RequestParam(required = false) Integer limit) {
+    currentUserService.requireCurrentUser();
+    return ApiResponse.page(orderQueryService.completedQueue(cursor, limit));
+  }
+
   @GetMapping("/{orderId:\\d+}/review")
   @PreAuthorize("hasRole('BO')")
   public ApiResponse<OrderDetailResponse> review(@PathVariable Long orderId) {
     return ApiResponse.of(orderQueryService.detail(orderId, currentUserService.requireCurrentUser()));
+  }
+
+  /** A-25 BO kanban: four status columns, optional AM/customer/date filters. */
+  @GetMapping("/kanban")
+  @PreAuthorize("hasRole('BO')")
+  public ApiResponse<com.blue333.ordermgmt.dto.kanban.KanbanResponses.KanbanResponse> kanban(
+      @RequestParam(name = "am_id", required = false) Long amId,
+      @RequestParam(required = false) String customer,
+      @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate from,
+      @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate to) {
+    currentUserService.requireCurrentUser();
+    return ApiResponse.of(kanbanService.kanban(amId, customer, from, to));
+  }
+
+  /** A-29 order timeline: visible to AM/BO/DS under BR-13 scoping. */
+  @GetMapping("/{orderId:\\d+}/timeline")
+  @PreAuthorize("hasAnyRole('AM','BO','DS')")
+  public ApiResponse<List<com.blue333.ordermgmt.dto.timeline.TimelineResponses.TimelineEntryResponse>> timeline(
+      @PathVariable Long orderId, @RequestParam(required = false) String cursor,
+      @RequestParam(required = false) Integer limit) {
+    return ApiResponse.page(timelineService.timeline(orderId,
+        currentUserService.requireCurrentUser(), cursor, limit));
   }
 
   @GetMapping("/{orderId:\\d+}")
@@ -160,16 +206,42 @@ public class OrderController {
     return ApiResponse.of(orderQueryService.detail(orderId, current));
   }
 
+  /**
+   * A-22 cancel. AM may cancel their own pending-confirmation draft; BO may cancel an in-production
+   * order and must state a reason. IN_PRODUCTION cancellation cascades to every non-terminal task.
+   */
   @PostMapping("/{orderId:\\d+}/cancel")
   @PreAuthorize("hasAnyRole('AM','BO')")
-  public ApiResponse<OrderDetailResponse> cancel(@PathVariable Long orderId, @RequestBody(required = false) CancelOrderRequest request) {
+  public ApiResponse<OrderDetailResponse> cancel(@PathVariable Long orderId,
+      @RequestBody(required = false) CancelOrderRequest request) {
     CurrentUser current = currentUserService.requireCurrentUser();
-    if (current.hasRole(com.blue333.ordermgmt.domain.enums.RoleType.AM) && !current.hasRole(com.blue333.ordermgmt.domain.enums.RoleType.BO)) accessControl.findOwnedOrderForAm(orderId, current);
-    else accessControl.findVisibleOrder(orderId, current);
-    if (current.hasRole(com.blue333.ordermgmt.domain.enums.RoleType.BO) && (request == null || request.reason() == null || request.reason().isBlank())) throw new IllegalArgumentException("A cancellation reason is required");
-    Order beforeCancel = accessControl.findVisibleOrder(orderId, current);
-    if (beforeCancel.getStatus() == OrderStatus.IN_PRODUCTION) throw new InvalidStateTransitionException("Production-order cascade cancellation will be provided in Phase 4");
-    return ApiResponse.of(orderQueryService.detail(orderService.cancelOrder(orderId)));
+    boolean businessOwner = current.hasRole(com.blue333.ordermgmt.domain.enums.RoleType.BO);
+    Order order = businessOwner
+        ? accessControl.findVisibleOrder(orderId, current)
+        : accessControl.findOwnedOrderForAm(orderId, current);
+    String reason = request == null ? null : request.reason();
+    if (businessOwner) {
+      if (reason == null || reason.isBlank()) {
+        throw new IllegalArgumentException("A cancellation reason is required");
+      }
+      if (order.getStatus() != OrderStatus.IN_PRODUCTION) {
+        throw new InvalidStateTransitionException(
+            "Business owners cancel in-production orders only (current: " + order.getStatus() + ")");
+      }
+    } else if (order.getStatus() != OrderStatus.PENDING_CONFIRM) {
+      throw new InvalidStateTransitionException(
+          "Account managers cancel pending-confirmation drafts only (current: " + order.getStatus() + ")");
+    }
+    return ApiResponse.of(orderQueryService.detail(orderService.cancelOrder(orderId, reason)));
+  }
+
+  /** A-18: the owning AM marks the client-confirmed order as delivered (IN_PRODUCTION → COMPLETED). */
+  @PostMapping("/{orderId:\\d+}/deliver")
+  @PreAuthorize("hasRole('AM')")
+  public ApiResponse<OrderDetailResponse> deliver(@PathVariable Long orderId) {
+    CurrentUser current = currentUserService.requireCurrentUser();
+    accessControl.findOwnedOrderForAm(orderId, current);
+    return ApiResponse.of(orderQueryService.detail(orderService.markDelivered(orderId)));
   }
 
   public record MaterialSpecRequest(@NotNull @JsonProperty("material_type") com.blue333.ordermgmt.domain.enums.MaterialType materialType, @NotBlank @JsonProperty("spec_size") String specSize) {}

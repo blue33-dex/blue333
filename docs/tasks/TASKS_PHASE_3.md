@@ -181,3 +181,18 @@ Phase 3 交付后：
 |---|---|---|
 | 待确认-01 | PDF 归档报告库选型 | OpenPDF（AGPL） vs iText 7（商业授权复杂）。**架构方案建议 OpenPDF**，需团队确认授权合规性 |
 | 待确认-02 | FeedbackItem 自动过期触发时机 | 架构方案建议"同订单更高版本 FINAL 时触发"。需确认：是 markFinal 时同步触发，还是定时任务异步扫描 |
+
+---
+
+## 实现状态（2026-11-04 完成）
+
+| 项 | 结果 |
+|---|---|
+| DB 迁移 | **V7__phase3_client_review_tables.sql**（V4 已被 Phase 2 占用；4 张表 + 唯一约束 + FK）|
+| 待确认-01（PDF 库）| 已采用 **OpenPDF 1.3.30**；默认 Helvetica，`ARCHIVE_REPORT_FONT_PATH` 可嵌入 CJK TTF |
+| 待确认-02（过期触发）| 采用 **markFinal 同步触发**（`InternalReviewService.markFinal` → `FeedbackItemRepository.expireUnresolvedForOrder`）|
+| BR-10 不可篡改 | `ConfirmationRecord` 为 `@Immutable`，Repository 仅 save/find；迁移中移除 DB 触发器（MySQL 8 binlog 下应用账号无 SUPER），改为注释记录生产账号授权建议 |
+| 后端任务 | P3-T01~P3-T08、P3-T15~P3-T20 全部完成；后端单测 109/109 |
+| E2E | `infra/scripts/e2e-phase3.ps1` 41/41；既有 4 个 E2E 全部回归通过 |
+| 前端任务 | P3-T09 `api/modules/clientReview.ts`；P3-T10 `views/am/ClientReview.vue`；P3-T11 `MyOrderList` + 后端 `client_review_status`/`open_feedback_count`；P3-T12 `components/ds/FeedbackPanel.vue`；P3-T13 `views/bo/OrderArchive.vue` + `GET /orders/completed` |
+| SSE | 站内通知 SSE 推送属于 Phase 4 通知中心，Phase 3 不实现，方案已确定（见 TASKS_PHASE_4）|

@@ -2,14 +2,14 @@
 /**
  * P1-T30 · BO 待审阅列表
  *
- * TODO(后端就绪):
- *   - orderApi.listMyOrders 自动走真实 GET /api/v1/orders/mine
- *   - 分页、筛选（状态/日期/关键字）按 PRD 补充
+ * 数据源：GET /api/v1/orders/review-queue（真实接口）；点击行进入 A-04 审阅页。
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { orderApi, type OrderBrief } from '../../api/modules/order'
+import { errorMessage } from '../../api/http'
 import OrderStatusTag from '../../components/common/OrderStatusTag.vue'
+import NotificationBell from '../../components/common/NotificationBell.vue'
 import { OrderStatus } from '../../types/enums'
 
 const router = useRouter()
@@ -17,7 +17,7 @@ const allOrders = ref<OrderBrief[]>([])
 const loading = ref(true)
 const error = ref('')
 
-/** BO 审阅队列 = 所有 PENDING_CONFIRM 的订单，按 updated_at 倒序 */
+/** BO 审阅队列 = 后端 /orders/review-queue 返回的 PENDING_CONFIRM 订单 */
 const pendingOrders = computed(() =>
   allOrders.value
     .filter((o) => o.status === OrderStatus.PENDING_CONFIRM)
@@ -28,10 +28,10 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await orderApi.listMyOrders()
+    const res = await orderApi.listReviewQueue()
     allOrders.value = (res.data as OrderBrief[]) || []
-  } catch (e: any) {
-    error.value = e?.message || '加载待审阅列表失败'
+  } catch (e) {
+    error.value = errorMessage(e, '加载待审阅列表失败')
   } finally {
     loading.value = false
   }
@@ -49,7 +49,14 @@ onMounted(load)
     <header class="page-header">
       <div>
         <h1>待审阅订单</h1>
-        <p class="desc">共 {{ pendingOrders.length }} 条待处理（Phase 1 mock 数据）</p>
+        <p class="desc">共 {{ pendingOrders.length }} 条待处理</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn ghost" @click="router.push('/bo/kanban')">生产看板 →</button>
+        <button class="btn ghost" @click="router.push('/bo/exceptions')">异常管理 →</button>
+        <button class="btn ghost" @click="router.push('/bo/internal-review')">内部评审 →</button>
+        <button class="btn ghost" @click="router.push('/bo/archive')">订单归档 →</button>
+        <NotificationBell />
       </div>
     </header>
 
@@ -88,9 +95,13 @@ onMounted(load)
 
 <style scoped>
 .page { padding: 24px; max-width: 1100px; margin: 0 auto; }
-.page-header { margin-bottom: 16px; }
+.page-header { margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .page-header h1 { margin: 0 0 2px; font-size: 20px; }
 .page-header .desc { margin: 0; color: #666; font-size: 13px; }
+.header-actions { display: flex; gap: 10px; }
+.btn { padding: 8px 16px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 14px; }
+.btn.ghost { color: #606266; }
+.btn.ghost:hover { color: #409eff; border-color: #c6e2ff; background: #ecf5ff; }
 
 .card {
   background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);

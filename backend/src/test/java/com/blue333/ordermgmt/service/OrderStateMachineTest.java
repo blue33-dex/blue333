@@ -39,6 +39,19 @@ class OrderStateMachineTest {
         .isInstanceOf(InvalidStateTransitionException.class);
   }
 
+  @Test
+  void permitsProductionToCompletedButCompletedIsTerminal() {
+    Order order = pendingOrder();
+    stateMachine.transition(order, OrderStatus.IN_PRODUCTION);
+    stateMachine.transition(order, OrderStatus.COMPLETED);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+
+    assertThatThrownBy(() -> stateMachine.transition(order, OrderStatus.IN_PRODUCTION))
+        .isInstanceOf(InvalidStateTransitionException.class);
+    assertThatThrownBy(() -> stateMachine.transition(order, OrderStatus.CANCELLED))
+        .isInstanceOf(InvalidStateTransitionException.class);
+  }
+
   private Order pendingOrder() {
     return Order.create("ORD-20250101-001", "Customer", "Store display", LocalDate.now(), null,
         Mockito.mock(User.class));

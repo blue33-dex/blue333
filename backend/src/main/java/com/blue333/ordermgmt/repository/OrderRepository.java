@@ -41,4 +41,24 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
   @Query("select case when count(t) > 0 then true else false end from MaterialTask t"
       + " where t.order.id = :orderId and t.assignee.id = :dsId")
   boolean existsTaskAssignedTo(@Param("orderId") Long orderId, @Param("dsId") Long dsId);
+
+  /**
+   * A-25 kanban: one query per status column so a busy column can never starve the others. Filters
+   * are optional; {@code to} is exclusive so a single day can be expressed as [from, to).
+   */
+  @Query("select o from Order o where o.status = :status and (:amId is null or o.am.id = :amId)"
+      + " and (:customer is null or lower(o.customerName) like lower(concat('%', :customer, '%')))"
+      + " and (:from is null or o.createdAt >= :from) and (:to is null or o.createdAt < :to)"
+      + " order by o.createdAt desc, o.id desc")
+  List<Order> findForKanban(@Param("status") OrderStatus status, @Param("amId") Long amId,
+      @Param("customer") String customer, @Param("from") java.time.LocalDateTime from,
+      @Param("to") java.time.LocalDateTime to, Pageable pageable);
+
+  /** A-25 column totals in a single aggregate query. */
+  @Query("select o.status, count(o) from Order o where (:amId is null or o.am.id = :amId)"
+      + " and (:customer is null or lower(o.customerName) like lower(concat('%', :customer, '%')))"
+      + " and (:from is null or o.createdAt >= :from) and (:to is null or o.createdAt < :to)"
+      + " group by o.status")
+  List<Object[]> countForKanban(@Param("amId") Long amId, @Param("customer") String customer,
+      @Param("from") java.time.LocalDateTime from, @Param("to") java.time.LocalDateTime to);
 }

@@ -1,5 +1,6 @@
 package com.blue333.ordermgmt.domain;
 
+import com.blue333.ordermgmt.domain.enums.AssignmentType;
 import com.blue333.ordermgmt.domain.enums.Priority;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,12 +20,6 @@ import org.hibernate.annotations.CreationTimestamp;
 @Entity
 @Table(name = "assignments")
 public class Assignment {
-  /**
-   * Kept as a controlled persistence value until Phase 2 introduces the assignment-type enum.
-   * The column is intentionally a String today to remain compatible with the existing schema.
-   */
-  public static final String INITIAL_ASSIGNMENT_TYPE = "INITIAL";
-
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -51,8 +46,9 @@ public class Assignment {
   @Column(name = "remark", columnDefinition = "TEXT")
   private String remark;
 
+  @Enumerated(EnumType.STRING)
   @Column(name = "assignment_type", nullable = false, length = 10)
-  private String assignmentType;
+  private AssignmentType assignmentType;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "previous_assignee_id")
@@ -72,6 +68,33 @@ public class Assignment {
       LocalDateTime taskDeadline,
       Priority priority,
       String remark) {
+    Assignment assignment = base(task, assigner, assignee, taskDeadline, priority, remark);
+    assignment.assignmentType = AssignmentType.INITIAL;
+    return assignment;
+  }
+
+  /** A-07 / EN-12: a REASSIGN row keeps the designer the task came from for a complete handover trail. */
+  public static Assignment reassigned(
+      MaterialTask task,
+      User assigner,
+      User assignee,
+      User previousAssignee,
+      LocalDateTime taskDeadline,
+      Priority priority,
+      String remark) {
+    Assignment assignment = base(task, assigner, assignee, taskDeadline, priority, remark);
+    assignment.assignmentType = AssignmentType.REASSIGN;
+    assignment.previousAssignee = Objects.requireNonNull(previousAssignee, "previousAssignee must not be null");
+    return assignment;
+  }
+
+  private static Assignment base(
+      MaterialTask task,
+      User assigner,
+      User assignee,
+      LocalDateTime taskDeadline,
+      Priority priority,
+      String remark) {
     Assignment assignment = new Assignment();
     assignment.task = Objects.requireNonNull(task, "task must not be null");
     assignment.assigner = Objects.requireNonNull(assigner, "assigner must not be null");
@@ -79,7 +102,6 @@ public class Assignment {
     assignment.taskDeadline = Objects.requireNonNull(taskDeadline, "taskDeadline must not be null");
     assignment.priority = Objects.requireNonNull(priority, "priority must not be null");
     assignment.remark = remark;
-    assignment.assignmentType = INITIAL_ASSIGNMENT_TYPE;
     return assignment;
   }
 
@@ -90,7 +112,7 @@ public class Assignment {
   public LocalDateTime getTaskDeadline() { return taskDeadline; }
   public Priority getPriority() { return priority; }
   public String getRemark() { return remark; }
-  public String getAssignmentType() { return assignmentType; }
+  public AssignmentType getAssignmentType() { return assignmentType; }
   public User getPreviousAssignee() { return previousAssignee; }
   public LocalDateTime getCreatedAt() { return createdAt; }
 }

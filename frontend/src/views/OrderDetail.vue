@@ -3,19 +3,23 @@
  * P1-T29 · 通用订单详情页
  * 三角色共用（AM / BO / DS 路由均可到达），根据 primaryRole 渲染角色专属操作区
  *
- * TODO(后端就绪):
- *   - getOrderDetail / reviewOrder 自动切换到真实接口（USE_MOCK = false）
- *   - AM 取消按钮调 DELETE /orders/{id}
- *   - BO 退回/派发操作走真实 POST
- *   - 附件列表支持文件预览/下载
- *   - 关联物料任务完整列表（当前 mock 只在 assignTask 后有数据）
+ * - S-04 / A-04 真实接口
+ * - S-08 附件下载（后端 302 → 5 分钟预签名 GET）
+ * - AM 且订单「待确认」时可继续上传附件（P1-T26 三步直传）
+ * - A-29 操作时间线 + P4-T13 通知铃铛
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { orderApi, type OrderDetail } from '../api/modules/order'
+import { userApi, type DesignerSummary } from '../api/modules/user'
+import { attachmentApi, type AttachmentItem } from '../api/modules/attachment'
+import { errorMessage } from '../api/http'
 import OrderStatusTag from '../components/common/OrderStatusTag.vue'
-import { RoleType, OrderStatus, RejectReasonType } from '../types/enums'
+import NotificationBell from '../components/common/NotificationBell.vue'
+import OrderTimeline from '../components/common/OrderTimeline.vue'
+import AttachmentUploader from '../components/common/AttachmentUploader.vue'
+import { RoleType, OrderStatus, RejectReasonType, Priority } from '../types/enums'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,9 +39,10 @@ const rejectError = ref('')
 
 // BO 派发表单（仅 BO 角色可见）
 const assignOpen = ref(false)
-const assignAssigneeName = ref('')
+const assignAssigneeId = ref<number | null>(null)
+const designers = ref<DesignerSummary[]>([])
 const assignDeadline = ref('')
-const assignPriority = ref('MEDIUM')
+const assignPriority = ref<string>(Priority.MEDIUM)
 const assignSubmitting = ref(false)
 const assignError = ref('')
 
@@ -49,9 +54,9 @@ const reasonTypeOptions: { value: string; label: string }[] = [
 ]
 
 const priorityOptions: { value: string; label: string }[] = [
-  { value: 'HIGH', label: '高' },
-  { value: 'MEDIUM', label: '中' },
-  { value: 'LOW', label: '低' },
+  { value: Priority.HIGH, label: '高' },
+  { value: Priority.MEDIUM, label: '中' },
+  { value: Priority.LOW, label: '低' },
 ]
 
 const rejectReasonLabel = (v: string) =>
@@ -64,14 +69,19 @@ async function load() {
     let res
     if (auth.primaryRole === RoleType.BO) {
       // BO 走 review 端点（可带审阅上下文）
-      res = await orderApi.reviewOrder(orderId.value)
+      const [reviewRes, designerRes] = await Promise.all([
+        orderApi.reviewOrder(orderId.value),
+        userApi.listDesigners(),
+      ])
+      res = reviewRes
+      designers.value = (designerRes.data as DesignerSummary[]) || []
     } else {
       res = await orderApi.getOrderDetail(orderId.value)
     }
     detail.value = (res.data as OrderDetail) || null
     if (!detail.value) error.value = '订单不存在'
-  } catch (e: any) {
-    error.value = e?.message || '加载订单详情失败'
+  } catch (e) {
+    error.value = errorMessage(e, '加载订单详情失败')
   } finally {
     loading.value = false
   }
@@ -100,8 +110,8 @@ async function handleReject() {
     await orderApi.rejectOrder(orderId.value, rejectReasonType.value, rejectRemark.value.trim())
     rejectOpen.value = false
     await load() // 重新拉取，刷新 reject_reason 区块
-  } catch (e: any) {
-    rejectError.value = e?.message || '退回失败'
+  } catch (e) {
+    rejectError.value = errorMessage(e, '退回失败')
   } finally {
     rejectSubmitting.value = false
   }
@@ -110,38 +120,38 @@ async function handleReject() {
 // --- BO 派发 ---
 function openAssign() {
   assignOpen.value = true
-  assignAssigneeName.value = ''
+  assignAssigneeId.value = null
   assignDeadline.value = ''
-  assignPriority.value = 'MEDIUM'
+  assignPriority.value = Priority.MEDIUM
   assignError.value = ''
 }
 function cancelAssign() {
   assignOpen.value = false
-  assignAssigneeName.value = ''
+  assignAssigneeId.value = null
   assignError.value = ''
 }
 async function handleAssign() {
-  if (!assignAssigneeName.value.trim()) {
-    assignError.value = '请输入设计师姓名'
+  if (!assignAssigneeId.value) {
+    assignError.value = '请选择设计师'
     return
   }
   if (!assignDeadline.value) {
-    assignError.value = '请选择派发截止日期'
+    assignError.value = '请选择任务截止时间'
     return
   }
   assignSubmitting.value = true
   assignError.value = ''
   try {
     await orderApi.assignTask(orderId.value, {
-      assignee_id: 3,
-      assignee_name: assignAssigneeName.value.trim(),
-      task_deadline: new Date(assignDeadline.value).toISOString(),
+      assignee_id: assignAssigneeId.value,
+      // datetime-local 输出 YYYY-MM-DDTHH:mm，后端 LocalDateTime 可直接解析
+      task_deadline: assignDeadline.value,
       priority: assignPriority.value,
     })
     assignOpen.value = false
     await load() // 刷新为 IN_PRODUCTION，物料任务也会同步创建
-  } catch (e: any) {
-    assignError.value = e?.message || '派发失败'
+  } catch (e) {
+    assignError.value = errorMessage(e, '派发失败')
   } finally {
     assignSubmitting.value = false
   }
@@ -159,8 +169,8 @@ async function handleResubmit() {
     await orderApi.submitOrder(orderId.value)
     resubmitDone.value = true
     await load()
-  } catch (e: any) {
-    resubmitError.value = e?.message || '重新提交失败'
+  } catch (e) {
+    resubmitError.value = errorMessage(e, '重新提交失败')
   } finally {
     resubmitting.value = false
   }
@@ -171,6 +181,38 @@ function backToList() {
   if (auth.primaryRole === RoleType.AM) router.push('/am/orders')
   else if (auth.primaryRole === RoleType.BO) router.push('/bo/review')
   else router.push('/ds/tasks')
+}
+
+// --- 附件：S-08 下载 + P1-T26 直传（仅 AM 且订单待确认）---
+const downloadingId = ref<number | null>(null)
+const attachmentError = ref('')
+const uploadError = ref('')
+const canUploadAttachments = computed(
+  () => auth.primaryRole === RoleType.AM && detail.value?.status === OrderStatus.PENDING_CONFIRM
+)
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${bytes} B`
+}
+
+async function downloadAttachment(a: { id: number; file_name: string }) {
+  attachmentError.value = ''
+  downloadingId.value = a.id
+  try {
+    await attachmentApi.download(a.id, a.file_name)
+  } catch (e) {
+    attachmentError.value = errorMessage(e, '附件下载失败')
+  } finally {
+    downloadingId.value = null
+  }
+}
+
+/** 上传成功后本地追加，避免整页重载 */
+function handleAttachmentUploaded(a: AttachmentItem) {
+  if (!detail.value) return
+  detail.value.attachments = [...(detail.value.attachments || []), a]
 }
 
 onMounted(load)
@@ -188,6 +230,13 @@ onMounted(load)
         <template v-if="detail">
           <OrderStatusTag :status="detail.status" />
         </template>
+        <!-- P3-T10 · AM 客户评审入口 -->
+        <button
+          v-if="auth.primaryRole === RoleType.AM"
+          class="btn ghost small"
+          @click="router.push(`/am/orders/${orderId}/client-review`)"
+        >客户评审 / 反馈</button>
+        <NotificationBell />
       </div>
     </header>
 
@@ -248,10 +297,30 @@ onMounted(load)
         <ul v-if="detail.attachments?.length" class="attach-list">
           <li v-for="a in detail.attachments" :key="a.id">
             <span class="fname">{{ a.file_name }}</span>
-            <span class="muted">{{ (a.file_size / 1024 / 1024).toFixed(1) }} MB</span>
+            <span class="attach-meta">
+              <span class="muted">{{ formatSize(a.file_size) }}</span>
+              <button
+                class="btn ghost small"
+                :disabled="downloadingId === a.id"
+                @click="downloadAttachment(a)"
+              >{{ downloadingId === a.id ? '下载中…' : '下载' }}</button>
+            </span>
           </li>
         </ul>
-        <p v-else class="muted">（无附件。附件上传功能 P1-T26 待后端就绪后接入）</p>
+        <p v-else-if="!canUploadAttachments" class="muted">（无附件）</p>
+        <p v-if="attachmentError" class="err">{{ attachmentError }}</p>
+
+        <!-- P1-T26：仅 AM 且订单待确认时允许补充附件（后端同规则校验）-->
+        <div v-if="canUploadAttachments" class="upload-block">
+          <h3>补充附件</h3>
+          <p class="muted tiny">订单处于「待确认」状态，可继续上传；单文件 ≤ 200 MB。</p>
+          <AttachmentUploader
+            :order-id="orderId"
+            @uploaded="handleAttachmentUploaded"
+            @error="uploadError = $event"
+          />
+          <p v-if="uploadError" class="err">{{ uploadError }}</p>
+        </div>
       </section>
 
       <!-- AM 退回后重新提交（PRD 状态机：BO 退回 → AM 补充后重新提交）-->
@@ -305,12 +374,17 @@ onMounted(load)
           <h3>派发设计任务</h3>
           <div class="row">
             <label class="field">
-              <span>设计师姓名 <em>*</em></span>
-              <input v-model="assignAssigneeName" type="text" placeholder="如：李设计" />
+              <span>设计师 <em>*</em></span>
+              <select v-model="assignAssigneeId">
+                <option :value="null" disabled>请选择设计师</option>
+                <option v-for="designer in designers" :key="designer.id" :value="designer.id">
+                  {{ designer.name }}（{{ designer.username }}）
+                </option>
+              </select>
             </label>
             <label class="field">
-              <span>任务截止 <em>*</em></span>
-              <input v-model="assignDeadline" type="date" />
+              <span>任务截止时间 <em>*</em></span>
+              <input v-model="assignDeadline" type="datetime-local" />
             </label>
           </div>
           <label class="field">
@@ -335,6 +409,9 @@ onMounted(load)
       <section v-else-if="auth.primaryRole === RoleType.BO" class="card">
         <p class="muted">订单当前状态为"{{ detail.status }}"，无可执行的审阅操作。</p>
       </section>
+
+      <!-- P4-T14 · A-29 操作时间线（AM / BO / DS 均可查看）-->
+      <OrderTimeline :order-id="orderId" />
     </template>
   </div>
 </template>
@@ -382,6 +459,9 @@ onMounted(load)
   padding: 8px 12px; background: #fafbfc; border-radius: 4px; margin-bottom: 6px;
 }
 .fname { font-family: Menlo, Consolas, monospace; font-size: 13px; }
+.attach-meta { display: flex; align-items: center; gap: 12px; }
+.upload-block { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #ebeef5; }
+.upload-block h3 { margin: 0 0 6px; font-size: 14px; color: #303133; }
 
 .action-card h2 { border-left-color: #e6a23c; }
 .sub-card { margin-top: 14px; padding: 16px; background: #fdf6ec; border-radius: 6px; }
@@ -389,7 +469,7 @@ onMounted(load)
 .field { display: block; margin-bottom: 12px; }
 .field > span { display: block; font-size: 13px; color: #606266; margin-bottom: 6px; }
 .field em { color: #f56c6c; font-style: normal; margin-left: 2px; }
-.field input[type="text"], .field input[type="date"], .field select, .field textarea {
+.field input[type="text"], .field input[type="date"], .field input[type="datetime-local"], .field select, .field textarea {
   width: 100%; padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 4px;
   box-sizing: border-box; font-size: 14px; font-family: inherit;
 }

@@ -6,10 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.blue333.ordermgmt.config.MinioProperties;
+import com.blue333.ordermgmt.config.S3Properties;
 import com.blue333.ordermgmt.dto.storage.PresignedUrlResponse;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -23,7 +24,7 @@ class FileStorageServiceTest {
   void setUp() {
     minioClient = Mockito.mock(MinioClient.class);
     fileStorageService = new FileStorageService(
-        minioClient, new MinioProperties("http://minio:9000", "access", "secret", "ordermgmt"));
+        minioClient, new S3Properties("http://s3:8333", "access", "secret", "ordermgmt"));
   }
 
   @Test
@@ -71,5 +72,24 @@ class FileStorageServiceTest {
     String objectKey = fileStorageService.generateObjectKey("attachments/order-12", "Source File.PDF");
 
     assertThat(objectKey).matches("attachments/order-12/[0-9a-f-]{36}\\.pdf");
+  }
+
+  @Test
+  void storesServerGeneratedContentThroughTheInternalEndpoint() throws Exception {
+    fileStorageService.putObject("archives/order-1/report.pdf", new byte[] {1, 2, 3}, "application/pdf");
+
+    ArgumentCaptor<PutObjectArgs> captor = ArgumentCaptor.forClass(PutObjectArgs.class);
+    verify(minioClient).putObject(captor.capture());
+    assertThat(captor.getValue().bucket()).isEqualTo("ordermgmt");
+    assertThat(captor.getValue().object()).isEqualTo("archives/order-1/report.pdf");
+    assertThat(captor.getValue().contentType()).isEqualTo("application/pdf");
+  }
+
+  @Test
+  void rejectsEmptyServerGeneratedContent() {
+    assertThatIllegalArgumentException().isThrownBy(
+        () -> fileStorageService.putObject("archives/order-1/report.pdf", new byte[0], "application/pdf"));
+    assertThatIllegalArgumentException().isThrownBy(
+        () -> fileStorageService.putObject("archives/order-1/report.pdf", new byte[] {1}, " "));
   }
 }

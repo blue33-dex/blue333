@@ -9,11 +9,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.blue333.ordermgmt.domain.Attachment;
+import com.blue333.ordermgmt.domain.DesignVersion;
 import com.blue333.ordermgmt.domain.MaterialTask;
 import com.blue333.ordermgmt.domain.Order;
 import com.blue333.ordermgmt.domain.User;
 import com.blue333.ordermgmt.domain.enums.RoleType;
+import com.blue333.ordermgmt.domain.enums.VersionStatus;
 import com.blue333.ordermgmt.repository.AttachmentRepository;
+import com.blue333.ordermgmt.repository.DesignVersionRepository;
 import com.blue333.ordermgmt.repository.MaterialTaskRepository;
 import com.blue333.ordermgmt.repository.OrderRepository;
 import java.util.Optional;
@@ -26,6 +29,7 @@ class AccessControlServiceTest {
   private static final long ORDER_ID = 10L;
   private static final long TASK_ID = 20L;
   private static final long ATTACHMENT_ID = 30L;
+  private static final long VERSION_ID = 40L;
   private static final long OWNER_AM_ID = 1L;
   private static final long OTHER_AM_ID = 2L;
   private static final long BO_ID = 3L;
@@ -35,6 +39,7 @@ class AccessControlServiceTest {
   private OrderRepository orderRepository;
   private MaterialTaskRepository materialTaskRepository;
   private AttachmentRepository attachmentRepository;
+  private DesignVersionRepository versionRepository;
   private AccessControlService service;
   private Order order;
 
@@ -43,7 +48,9 @@ class AccessControlServiceTest {
     orderRepository = mock(OrderRepository.class);
     materialTaskRepository = mock(MaterialTaskRepository.class);
     attachmentRepository = mock(AttachmentRepository.class);
-    service = new AccessControlService(orderRepository, materialTaskRepository, attachmentRepository);
+    versionRepository = mock(DesignVersionRepository.class);
+    service = new AccessControlService(orderRepository, materialTaskRepository, attachmentRepository,
+        versionRepository);
 
     order = mock(Order.class);
     when(order.getId()).thenReturn(ORDER_ID);
@@ -151,6 +158,61 @@ class AccessControlServiceTest {
     when(attachmentRepository.findById(77L)).thenReturn(Optional.empty());
     assertThatThrownBy(() -> service.findVisibleAttachment(77L, current(BO_ID, RoleType.BO)))
         .isInstanceOf(ResourceNotFoundException.class);
+  }
+
+  @Test
+  void versionHistoryVisibilityFollowsPrdMatrix() {
+    stubVersion(VersionStatus.DRAFT, DS_ID);
+
+    assertThat(service.findVisibleVersion(VERSION_ID, current(BO_ID, RoleType.BO))).isNotNull();
+    assertThat(service.findVisibleVersion(VERSION_ID, current(OWNER_AM_ID, RoleType.AM))).isNotNull();
+    assertThat(service.findVisibleVersion(VERSION_ID, current(DS_ID, RoleType.DS))).isNotNull();
+    assertThatThrownBy(() -> service.findVisibleVersion(VERSION_ID, current(OTHER_AM_ID, RoleType.AM)))
+        .isInstanceOf(ResourceNotFoundException.class);
+    assertThatThrownBy(() -> service.findVisibleVersion(VERSION_ID, current(OTHER_DS_ID, RoleType.DS)))
+        .isInstanceOf(ResourceNotFoundException.class);
+  }
+
+  @Test
+  void nonFinalVersionDownloadIsLimitedToBoAndTheUploadingDesigner() {
+    stubVersion(VersionStatus.PENDING_INTERNAL_REVIEW, DS_ID);
+
+    assertThat(service.findDownloadableVersion(VERSION_ID, current(BO_ID, RoleType.BO))).isNotNull();
+    assertThat(service.findDownloadableVersion(VERSION_ID, current(DS_ID, RoleType.DS))).isNotNull();
+    assertThatThrownBy(() -> service.findDownloadableVersion(VERSION_ID, current(OWNER_AM_ID, RoleType.AM)))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
+  void finalVersionDownloadIsLimitedToOwningAmAndBo() {
+    stubVersion(VersionStatus.FINAL, DS_ID);
+
+    assertThat(service.findDownloadableVersion(VERSION_ID, current(BO_ID, RoleType.BO))).isNotNull();
+    assertThat(service.findDownloadableVersion(VERSION_ID, current(OWNER_AM_ID, RoleType.AM))).isNotNull();
+    assertThatThrownBy(() -> service.findDownloadableVersion(VERSION_ID, current(DS_ID, RoleType.DS)))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(() -> service.findDownloadableVersion(VERSION_ID, current(OTHER_AM_ID, RoleType.AM)))
+        .isInstanceOf(ResourceNotFoundException.class);
+  }
+
+  @Test
+  void designerCannotDownloadAVersionUploadedBySomeoneElse() {
+    // e.g. a version uploaded by a previous assignee of the same task
+    stubVersion(VersionStatus.DRAFT, OTHER_DS_ID);
+
+    assertThat(service.findVisibleVersion(VERSION_ID, current(DS_ID, RoleType.DS))).isNotNull();
+    assertThatThrownBy(() -> service.findDownloadableVersion(VERSION_ID, current(DS_ID, RoleType.DS)))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  private void stubVersion(VersionStatus status, long uploaderId) {
+    DesignVersion version = mock(DesignVersion.class);
+    MaterialTask task = materialTaskRepository.findById(TASK_ID).orElseThrow();
+    when(version.getTask()).thenReturn(task);
+    when(version.getStatus()).thenReturn(status);
+    User uploader = user(uploaderId);
+    when(version.getUploader()).thenReturn(uploader);
+    when(versionRepository.findById(VERSION_ID)).thenReturn(Optional.of(version));
   }
 
   private static Throwable catchThrowable(org.assertj.core.api.ThrowableAssert.ThrowingCallable callable) {

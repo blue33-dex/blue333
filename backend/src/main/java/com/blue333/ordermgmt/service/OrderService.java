@@ -4,11 +4,13 @@ import cn.hutool.http.HtmlUtil;
 import com.blue333.ordermgmt.aop.AuditedAction;
 import com.blue333.ordermgmt.domain.Attachment;
 import com.blue333.ordermgmt.domain.MaterialSpec;
+import com.blue333.ordermgmt.domain.MaterialTask;
 import com.blue333.ordermgmt.domain.Order;
 import com.blue333.ordermgmt.domain.RequirementBaseline;
 import com.blue333.ordermgmt.domain.User;
 import com.blue333.ordermgmt.domain.enums.AuditActionType;
 import com.blue333.ordermgmt.domain.enums.AuditTargetType;
+import com.blue333.ordermgmt.domain.enums.MaterialTaskStatus;
 import com.blue333.ordermgmt.domain.enums.OrderStatus;
 import com.blue333.ordermgmt.domain.enums.RoleType;
 import com.blue333.ordermgmt.dto.order.CreateOrderCommand;
@@ -19,6 +21,7 @@ import com.blue333.ordermgmt.event.OrderRejectedEvent;
 import com.blue333.ordermgmt.event.OrderSubmittedEvent;
 import com.blue333.ordermgmt.repository.AttachmentRepository;
 import com.blue333.ordermgmt.repository.MaterialSpecRepository;
+import com.blue333.ordermgmt.repository.MaterialTaskRepository;
 import com.blue333.ordermgmt.repository.OrderRepository;
 import com.blue333.ordermgmt.repository.RequirementBaselineRepository;
 import com.blue333.ordermgmt.repository.UserRepository;
@@ -51,6 +54,9 @@ public class OrderService {
   private final ObjectMapper objectMapper;
   private final ApplicationEventPublisher eventPublisher;
   private final UserRepository userRepository;
+  private final DeliveryRules deliveryRules;
+  private final MaterialTaskRepository materialTaskRepository;
+  private final MaterialTaskService materialTaskService;
   private final Clock clock;
 
   public OrderService(
@@ -64,8 +70,14 @@ public class OrderService {
       ObjectMapper objectMapper,
       ApplicationEventPublisher eventPublisher,
       UserRepository userRepository,
+      DeliveryRules deliveryRules,
+      MaterialTaskRepository materialTaskRepository,
+      MaterialTaskService materialTaskService,
       Clock clock) {
     this.userRepository = userRepository;
+    this.deliveryRules = deliveryRules;
+    this.materialTaskRepository = materialTaskRepository;
+    this.materialTaskService = materialTaskService;
     this.clock = clock;
     this.orderRepository = orderRepository;
     this.materialSpecRepository = materialSpecRepository;
@@ -153,13 +165,54 @@ public class OrderService {
     return savedOrder;
   }
 
-  /** Authorization of AM and BO cancellation callers is intentionally deferred to the RBAC task. */
+  /**
+   * A-22: cancels an order and every task that is not already terminal. AM may cancel a
+   * pending-confirmation draft; BO may cancel an in-production order and must state why. Tasks that
+   * are already APPROVED or CANCELLED keep their state, and each cascaded task keeps its own audit
+   * trail through {@link MaterialTaskService#cancelTask(Long, String)}.
+   */
   @Transactional
   @AuditedAction(action = AuditActionType.CANCEL_ORDER, targetType = AuditTargetType.ORDER,
-      targetId = "#orderId", afterState = "#result.status")
-  public Order cancelOrder(Long orderId) {
+      targetId = "#orderId", beforeState = "'ACTIVE'", afterState = "#result.status",
+      remark = "T(com.blue333.ordermgmt.service.OrderService).sanitize(#reason)")
+  public Order cancelOrder(Long orderId, String reason) {
     Order order = findOrderForUpdate(orderId);
+    if (order.getStatus() != OrderStatus.PENDING_CONFIRM
+        && order.getStatus() != OrderStatus.IN_PRODUCTION) {
+      throw new InvalidStateTransitionException(
+          "Only pending-confirmation or in-production orders can be cancelled (current: "
+              + order.getStatus() + ")");
+    }
+    String cleanReason = sanitize(reason);
+    String taskReason = cleanReason == null || cleanReason.isBlank()
+        ? "订单已取消（级联取消任务）" : cleanReason;
+    for (MaterialTask task : materialTaskRepository.findAllByOrderIdOrderByIdAsc(orderId)) {
+      if (task.getStatus() == MaterialTaskStatus.APPROVED
+          || task.getStatus() == MaterialTaskStatus.CANCELLED) {
+        continue;
+      }
+      materialTaskService.cancelTask(task.getId(), taskReason);
+    }
     stateMachine.transition(order, OrderStatus.CANCELLED);
+    return orderRepository.save(order);
+  }
+
+  /**
+   * A-18: the owning AM marks a client-confirmed order as delivered (IN_PRODUCTION → COMPLETED).
+   * CONFLICT-02 is enforced by {@link DeliveryRules}: every task must be APPROVED and at least
+   * one version must be CLIENT_CONFIRMED or FINAL. Completed orders never leave that state.
+   */
+  @Transactional
+  @AuditedAction(action = AuditActionType.MARK_DELIVERED, targetType = AuditTargetType.ORDER,
+      targetId = "#orderId", beforeState = "'IN_PRODUCTION'", afterState = "#result.status")
+  public Order markDelivered(Long orderId) {
+    Order order = findOrderForUpdate(orderId);
+    if (order.getStatus() != OrderStatus.IN_PRODUCTION) {
+      throw new InvalidStateTransitionException(
+          "Only an in-production order can be marked as delivered (current: " + order.getStatus() + ")");
+    }
+    deliveryRules.requireDeliverable(orderId);
+    stateMachine.transition(order, OrderStatus.COMPLETED);
     return orderRepository.save(order);
   }
 

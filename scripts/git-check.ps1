@@ -104,6 +104,9 @@ Get-ChildItem -Recurse -Force -ErrorAction SilentlyContinue | Where-Object {
     $_.FullName -notmatch "\\dist\\" -and `
     $_.FullName -notmatch "\\target\\" -and `
     $_.FullName -notmatch "\\build\\"
+} | Where-Object {
+    # .env.example holds public demo values and is meant to be committed (see docs/GIT_WORKFLOW.md).
+    $_.Name -ne ".env.example"
 } | ForEach-Object {
     foreach ($pat in $sensitivePatterns) {
         if ($_.Name -match $pat -or $_.FullName -match $pat) {

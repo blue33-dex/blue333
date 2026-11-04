@@ -9,8 +9,9 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ordermgmt}
       MYSQL_USER: ${MYSQL_USER:?MYSQL_USER must be set}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set}
+    # Demo credentials are public, so every port is bound to the local machine only.
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - ordermgmt-mysql-data:/var/lib/mysql
     healthcheck:
@@ -20,40 +21,48 @@ services:
       retries: 10
       start_period: 30s
 
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - ordermgmt-minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-
-  minio-init:
-    image: minio/mc:latest
+  seaweed-s3-config:
+    image: alpine:3.20
     restart: "no"
-    entrypoint: ["/bin/sh", "/scripts/minio-init.sh"]
+    entrypoint: ["/bin/sh", "/scripts/seaweed-s3-config-init.sh"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
-      MINIO_APP_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:?MINIO_APP_ACCESS_KEY must be set}
-      MINIO_APP_SECRET_KEY: ${MINIO_APP_SECRET_KEY:?MINIO_APP_SECRET_KEY must be set}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
+      S3_ADMIN_ACCESS_KEY: ${S3_ADMIN_ACCESS_KEY:?S3_ADMIN_ACCESS_KEY must be set}
+      S3_ADMIN_SECRET_KEY: ${S3_ADMIN_SECRET_KEY:?S3_ADMIN_SECRET_KEY must be set}
     volumes:
-      - ./scripts/minio-init.sh:/scripts/minio-init.sh:ro
-      - ./minio/policies/ordermgmt-object-rw.json:/policies/ordermgmt-object-rw.json:ro
+      - ./scripts/seaweed-s3-config-init.sh:/scripts/seaweed-s3-config-init.sh:ro
+      - seaweed-s3-config:/config
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:3.94
+    restart: unless-stopped
+    # SeaweedFS 3.94 does not implement PutBucketCors; CORS origins are set on the gateway instead.
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -s3.allowedOrigins=${S3_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost}
+    ports:
+      - "127.0.0.1:8333:8333"
+      - "127.0.0.1:9333:9333"
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - ordermgmt-seaweed-data:/data
+      - seaweed-s3-config:/etc/seaweedfs:ro
     depends_on:
-      minio:
-        condition: service_healthy
+      seaweed-s3-config:
+        condition: service_completed_successfully
+
+  seaweed-s3-init:
+    image: amazon/aws-cli:2.17.0
+    restart: "no"
+    entrypoint: ["/bin/sh", "/scripts/seaweed-s3-bucket-init.sh"]
+    environment:
+      S3_ADMIN_ACCESS_KEY: ${S3_ADMIN_ACCESS_KEY:?S3_ADMIN_ACCESS_KEY must be set}
+      S3_ADMIN_SECRET_KEY: ${S3_ADMIN_SECRET_KEY:?S3_ADMIN_SECRET_KEY must be set}
+      S3_BUCKET: ${S3_BUCKET:-ordermgmt}
+    volumes:
+      - ./scripts/seaweed-s3-bucket-init.sh:/scripts/seaweed-s3-bucket-init.sh:ro
+    depends_on:
+      seaweedfs:
+        condition: service_started
 
   backend:
     build:
@@ -68,17 +77,17 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       JWT_ACCESS_TOKEN_TTL_MS: ${JWT_ACCESS_TOKEN_TTL_MS:-1800000}
       JWT_REFRESH_TOKEN_TTL_MS: ${JWT_REFRESH_TOKEN_TTL_MS:-604800000}
-      MINIO_ENDPOINT: http://minio:9000
-      # Browser-reachable address used in generated presigned URLs; set this to your domain in deployment.
-      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
-      MINIO_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:?MINIO_APP_ACCESS_KEY must be set}
-      MINIO_SECRET_KEY: ${MINIO_APP_SECRET_KEY:?MINIO_APP_SECRET_KEY must be set}
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:8333}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set}
+      S3_BUCKET: ${S3_BUCKET:-ordermgmt}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       mysql:
         condition: service_healthy
-      minio-init:
+      seaweed-s3-init:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health"]
@@ -91,7 +100,7 @@ services:
     image: nginx:1.24-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
@@ -99,7 +108,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/nginx-health"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -108,5 +117,7 @@ services:
 volumes:
   ordermgmt-mysql-data:
     name: ordermgmt-mysql-data
-  ordermgmt-minio-data:
-    name: ordermgmt-minio-data
+  ordermgmt-seaweed-data:
+    name: ordermgmt-seaweed-data
+  seaweed-s3-config:
+    name: ordermgmt-seaweed-s3-config

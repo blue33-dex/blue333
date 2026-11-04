@@ -1,18 +1,17 @@
 <script setup lang="ts">
 /**
- * P1-T32 · DS 我的任务列表（Phase 1 只读）
+ * P1-T32 + P2-T14 · DS 我的任务列表
  *
- * TODO(后端就绪):
- *   - materialTaskApi.listMine 自动走真实 GET /api/v1/material-tasks/mine
- *   - Phase 2 接入版本上传后，每行增加"上传版本"入口
+ * 点击行进入任务详情，可上传版本、提交内部评审（服务 7 流程）
  */
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { materialTaskApi, type TaskDetail } from '../../api/modules/materialTask'
+import { materialTaskApi, type TaskSummary } from '../../api/modules/materialTask'
+import { errorMessage } from '../../api/http'
 import TaskStatusTag from '../../components/common/TaskStatusTag.vue'
 
 const router = useRouter()
-const tasks = ref<TaskDetail[]>([])
+const tasks = ref<TaskSummary[]>([])
 const loading = ref(true)
 const error = ref('')
 
@@ -21,9 +20,9 @@ async function load() {
   error.value = ''
   try {
     const res = await materialTaskApi.listMine()
-    tasks.value = (res.data as TaskDetail[]) || []
-  } catch (e: any) {
-    error.value = e?.message || '加载任务列表失败'
+    tasks.value = (res.data as TaskSummary[]) || []
+  } catch (e) {
+    error.value = errorMessage(e, '加载任务列表失败')
   } finally {
     loading.value = false
   }
@@ -41,7 +40,7 @@ onMounted(load)
     <header class="page-header">
       <div>
         <h1>我的任务</h1>
-        <p class="desc">共 {{ tasks.length }} 条（Phase 1 只读，不可上传版本）</p>
+        <p class="desc">共 {{ tasks.length }} 条</p>
       </div>
     </header>
 

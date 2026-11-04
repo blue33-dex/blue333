@@ -83,4 +83,13 @@ public class Notification {
   public Boolean getRead() { return read; }
   public LocalDateTime getReadAt() { return readAt; }
   public LocalDateTime getCreatedAt() { return createdAt; }
+
+  /** Marking an already-read notification again keeps the original read timestamp. */
+  public void markRead(LocalDateTime now) {
+    if (Boolean.TRUE.equals(read)) {
+      return;
+    }
+    this.read = true;
+    this.readAt = now;
+  }
 }

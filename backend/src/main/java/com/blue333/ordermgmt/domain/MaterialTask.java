@@ -81,6 +81,13 @@ public class MaterialTask {
     this.status = Objects.requireNonNull(status, "status must not be null");
   }
 
+  /** A-07: moves the task to another designer after the service has validated the reassignment. */
+  public void reassign(User assignee, LocalDateTime taskDeadline, Priority priority) {
+    this.assignee = Objects.requireNonNull(assignee, "assignee must not be null");
+    this.taskDeadline = Objects.requireNonNull(taskDeadline, "taskDeadline must not be null");
+    this.priority = Objects.requireNonNull(priority, "priority must not be null");
+  }
+
   public Long getId() { return id; }
   public Order getOrder() { return order; }
   public MaterialSpec getMaterialSpec() { return materialSpec; }

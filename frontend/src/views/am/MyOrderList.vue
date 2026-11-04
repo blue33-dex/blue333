@@ -1,11 +1,11 @@
 <script setup lang="ts">
-// P1-T28 · AM 我的订单列表
-// TODO(P1-T28) 后端就绪后 orderApi.listMyOrders 自动走真实 GET /api/v1/orders/mine
+// P1-T28 · AM 我的订单列表（数据源 GET /api/v1/orders/mine）
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { orderApi, type OrderBrief } from '../../api/modules/order'
+import { errorMessage } from '../../api/http'
 import OrderStatusTag from '../../components/common/OrderStatusTag.vue'
-import { OrderStatus } from '../../types/enums'
+import { ClientReviewStatus, OrderStatus } from '../../types/enums'
 
 const router = useRouter()
 const orders = ref<OrderBrief[]>([])
@@ -18,8 +18,8 @@ async function loadOrders() {
   try {
     const res = await orderApi.listMyOrders()
     orders.value = (res.data as OrderBrief[]) || []
-  } catch (e: any) {
-    error.value = e?.message || '加载订单列表失败'
+  } catch (e) {
+    error.value = errorMessage(e, '加载订单列表失败')
   } finally {
     loading.value = false
   }
@@ -27,6 +27,18 @@ async function loadOrders() {
 
 function openDetail(id: number) {
   router.push(`/am/orders/${id}`)
+}
+
+/** P3-T10：进入客户评审页（发起评审 / 记录反馈 / 客户确认 / 交付）*/
+function goClientReview(id: number) {
+  router.push(`/am/orders/${id}/client-review`)
+}
+
+/** 评审状态展示文案（后端未返回该字段表示尚未发起评审）*/
+function reviewStatusLabel(status?: string): string {
+  if (status === ClientReviewStatus.IN_REVIEW) return '评审中'
+  if (status === ClientReviewStatus.COMPLETED) return '客户已确认'
+  return '—'
 }
 
 function goCreate() {
@@ -41,7 +53,7 @@ onMounted(loadOrders)
     <header class="page-header">
       <div>
         <h1>我的订单</h1>
-        <p class="desc">共 {{ orders.length }} 条（Phase 1 mock 数据）</p>
+        <p class="desc">共 {{ orders.length }} 条</p>
       </div>
       <button class="btn primary" @click="goCreate">+ 新建订单</button>
     </header>
@@ -56,8 +68,11 @@ onMounted(loadOrders)
             <th style="width: 160px">订单号</th>
             <th>客户名称</th>
             <th style="width: 110px">状态</th>
+            <th style="width: 110px">评审状态</th>
+            <th style="width: 100px">未解决反馈</th>
             <th style="width: 140px">交付截止</th>
             <th style="width: 180px">创建时间</th>
+            <th style="width: 110px">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -77,8 +92,28 @@ onMounted(loadOrders)
                 :title="o.reject_reason.remark"
               >已退回待补充</span>
             </td>
+            <td>
+              <span
+                v-if="o.client_review_status"
+                class="review-flag"
+                :class="o.client_review_status === ClientReviewStatus.COMPLETED ? 'done' : 'active'"
+              >{{ reviewStatusLabel(o.client_review_status) }}</span>
+              <span v-else class="muted">—</span>
+            </td>
+            <td>
+              <span v-if="o.open_feedback_count" class="feedback-count">{{ o.open_feedback_count }}</span>
+              <span v-else class="muted">0</span>
+            </td>
             <td>{{ o.delivery_deadline }}</td>
             <td class="muted">{{ o.created_at }}</td>
+            <td class="ops">
+              <button
+                v-if="o.status === OrderStatus.IN_PRODUCTION"
+                class="link"
+                @click.stop="goClientReview(o.id)"
+              >客户评审</button>
+              <span v-else class="muted">—</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -125,6 +160,22 @@ onMounted(loadOrders)
   display: inline-block; margin-left: 6px; padding: 1px 6px;
   font-size: 12px; color: #f56c6c; background: #fef0f0;
   border: 1px solid #fbc4c4; border-radius: 3px;
+}
+.review-flag {
+  display: inline-block; padding: 1px 8px; font-size: 12px; border-radius: 3px;
+  border: 1px solid transparent;
+}
+.review-flag.active { color: #e6a23c; background: #fdf6ec; border-color: #f5dab1; }
+.review-flag.done { color: #67c23a; background: #f0f9eb; border-color: #c2e7b0; }
+.feedback-count {
+  display: inline-block; min-width: 22px; text-align: center; padding: 1px 6px;
+  font-size: 12px; color: #f56c6c; background: #fef0f0;
+  border: 1px solid #fbc4c4; border-radius: 10px;
+}
+.ops { white-space: nowrap; }
+.link {
+  border: none; background: none; color: #409eff; cursor: pointer;
+  padding: 0; font-size: 13px; text-decoration: underline;
 }
 .muted { color: #999; }
 .empty, .global-err { padding: 20px 0; text-align: center; color: #999; }

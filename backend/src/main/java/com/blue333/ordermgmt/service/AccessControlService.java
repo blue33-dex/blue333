@@ -1,11 +1,14 @@
 package com.blue333.ordermgmt.service;
 
 import com.blue333.ordermgmt.domain.Attachment;
+import com.blue333.ordermgmt.domain.DesignVersion;
 import com.blue333.ordermgmt.domain.MaterialTask;
 import com.blue333.ordermgmt.domain.Order;
 import com.blue333.ordermgmt.domain.User;
 import com.blue333.ordermgmt.domain.enums.RoleType;
+import com.blue333.ordermgmt.domain.enums.VersionStatus;
 import com.blue333.ordermgmt.repository.AttachmentRepository;
+import com.blue333.ordermgmt.repository.DesignVersionRepository;
 import com.blue333.ordermgmt.repository.MaterialTaskRepository;
 import com.blue333.ordermgmt.repository.OrderRepository;
 import java.util.Objects;
@@ -32,14 +35,17 @@ public class AccessControlService {
   private final OrderRepository orderRepository;
   private final MaterialTaskRepository materialTaskRepository;
   private final AttachmentRepository attachmentRepository;
+  private final DesignVersionRepository versionRepository;
 
   public AccessControlService(
       OrderRepository orderRepository,
       MaterialTaskRepository materialTaskRepository,
-      AttachmentRepository attachmentRepository) {
+      AttachmentRepository attachmentRepository,
+      DesignVersionRepository versionRepository) {
     this.orderRepository = orderRepository;
     this.materialTaskRepository = materialTaskRepository;
     this.attachmentRepository = attachmentRepository;
+    this.versionRepository = versionRepository;
   }
 
   @Transactional(readOnly = true)
@@ -100,6 +106,50 @@ public class AccessControlService {
     return attachment;
   }
 
+  /**
+   * PRD 2.2.3 "查看版本历史": BO sees all versions, AM sees versions on own orders, DS sees versions of
+   * tasks currently assigned to the DS plus versions the DS uploaded.
+   */
+  @Transactional(readOnly = true)
+  public DesignVersion findVisibleVersion(Long versionId, CurrentUser currentUser) {
+    requireCurrentUser(currentUser);
+    if (!isPositive(versionId)) {
+      throw versionNotFound(versionId);
+    }
+    DesignVersion version = versionRepository.findById(versionId).orElseThrow(() -> versionNotFound(versionId));
+    if (!isVersionVisible(version, currentUser)) {
+      throw versionNotFound(versionId);
+    }
+    return version;
+  }
+
+  /** Whether a version of an already visible order may be listed for this user. */
+  public boolean isVersionVisible(DesignVersion version, CurrentUser currentUser) {
+    MaterialTask task = version.getTask();
+    return currentUser.hasRole(RoleType.BO)
+        || (currentUser.hasRole(RoleType.AM) && isOwnedBy(task.getOrder(), currentUser))
+        || (currentUser.hasRole(RoleType.DS)
+            && (sameUser(task.getAssignee(), currentUser) || sameUser(version.getUploader(), currentUser)));
+  }
+
+  /**
+   * PRD 2.2.3 "下载设计文件" combined with NFR-F5: BO may download every version; AM only FINAL versions
+   * of own orders; DS only versions the DS uploaded, excluding FINAL ones. A version the caller can see
+   * but not download yields 403, because its existence is already known to the caller.
+   */
+  @Transactional(readOnly = true)
+  public DesignVersion findDownloadableVersion(Long versionId, CurrentUser currentUser) {
+    DesignVersion version = findVisibleVersion(versionId, currentUser);
+    boolean isFinal = version.getStatus() == VersionStatus.FINAL;
+    boolean allowed = currentUser.hasRole(RoleType.BO)
+        || (currentUser.hasRole(RoleType.AM) && isFinal && isOwnedBy(version.getTask().getOrder(), currentUser))
+        || (currentUser.hasRole(RoleType.DS) && !isFinal && sameUser(version.getUploader(), currentUser));
+    if (!allowed) {
+      throw new AccessDeniedException("This design file is not downloadable for this role");
+    }
+    return version;
+  }
+
   private boolean isOrderVisible(Order order, CurrentUser currentUser) {
     if (currentUser.hasRole(RoleType.BO)) {
       return true;
@@ -142,6 +192,10 @@ public class AccessControlService {
 
   private ResourceNotFoundException taskNotFound(Long taskId) {
     return new ResourceNotFoundException("Material task does not exist: " + taskId);
+  }
+
+  private ResourceNotFoundException versionNotFound(Long versionId) {
+    return new ResourceNotFoundException("Design version does not exist: " + versionId);
   }
 
   private ResourceNotFoundException attachmentNotFound(Long attachmentId) {

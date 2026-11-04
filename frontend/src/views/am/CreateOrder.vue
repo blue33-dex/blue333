@@ -1,11 +1,16 @@
 <script setup lang="ts">
-// P1-T27 · AM 登记订单表单
-// TODO(P1-T26) 附件上传（file input + multipart）位置预留，当前 mock 阶段暂不实现
-// TODO(P1-T27) 后端就绪后 orderApi.createOrder / submitOrder 自动切换到真实 POST
+/**
+ * P1-T27 · AM 登记订单表单（AM-01 登记需求 + AM-02 上传参考素材）
+ *
+ * 提交流程：A-01 createOrder → 附件三步直传（P1-T26：presign → PUT → confirm）→ A-03 submitOrder。
+ * 若附件上传失败，订单已创建但不会重复创建；再次点击提交只补传失败/新增文件。
+ */
 import { reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { MaterialType } from '../../types/enums'
 import { orderApi } from '../../api/modules/order'
+import { errorMessage } from '../../api/http'
+import AttachmentUploader from '../../components/common/AttachmentUploader.vue'
 
 const router = useRouter()
 
@@ -43,6 +48,13 @@ const loading = ref(false)
 const submitting = ref(false)
 const errors = ref<Record<string, string>>({})
 const specErrors = ref<Record<number, Record<string, string>>>({})
+
+// --- 附件直传（P1-T26）---
+const uploaderRef = ref<InstanceType<typeof AttachmentUploader> | null>(null)
+/** 已创建但尚未送审的订单：避免附件失败后重复点击导致重复建单 */
+const createdOrderId = ref<number | null>(null)
+const createdOrderNo = ref('')
+const notice = ref('')
 
 function addSpec() {
   form.material_specs.push({ material_type: MaterialType.POSTER, spec_size: '' })
@@ -93,30 +105,50 @@ function validate(): boolean {
   return ok
 }
 
+function formPayload() {
+  return {
+    customer_name: form.customer_name.trim(),
+    use_scene: form.use_scene.trim(),
+    delivery_deadline: form.delivery_deadline,
+    remark: form.remark.trim() || undefined,
+    material_specs: form.material_specs.map((s) => ({
+      material_type: s.material_type,
+      spec_size: s.spec_size.trim(),
+    })),
+  }
+}
+
+/** A-01：只在首次调用时创建订单，后续重试复用同一订单 */
+async function ensureOrderCreated(): Promise<number> {
+  if (createdOrderId.value) return createdOrderId.value
+  const created = await orderApi.createOrder(formPayload())
+  const order = created.data
+  if (!order?.id) throw new Error('创建订单失败：后端未返回订单 ID')
+  createdOrderId.value = order.id
+  createdOrderNo.value = order.order_no || `#${order.id}`
+  notice.value = `订单 ${createdOrderNo.value} 已创建。附件上传失败可重试，再次提交不会重复建单；如需修改需求请返回列表重新登记。`
+  return order.id
+}
+
 async function handleSubmit() {
   if (!validate()) return
   loading.value = true
   submitting.value = true
+  errors.value.submit = ''
+  notice.value = ''
   try {
-    // TODO(P1-T26) 上传附件后将返回的 file_ids 一并写入 material_specs 或 attachments 字段
-    const created = await orderApi.createOrder({
-      customer_name: form.customer_name.trim(),
-      use_scene: form.use_scene.trim(),
-      delivery_deadline: form.delivery_deadline,
-      remark: form.remark.trim() || undefined,
-      material_specs: form.material_specs.map((s) => ({
-        material_type: s.material_type,
-        spec_size: s.spec_size.trim(),
-      })),
-    })
-    const orderId = created.data?.orderId
-    if (orderId) {
-      // 登记成功后立即提交 → 进入 BO 审阅队列
-      await orderApi.submitOrder(orderId)
+    const orderId = await ensureOrderCreated()
+    // P1-T26：附件三步直传（presign → PUT → confirm）
+    const upload = await uploaderRef.value?.uploadAll(orderId)
+    if (upload && upload.failed > 0) {
+      errors.value.submit = `订单 ${createdOrderNo.value} 已保存，但 ${upload.failed} 个附件上传失败；请重试上传后再提交（不会重复建单）。`
+      return
     }
+    // 登记成功后立即提交 → 进入 BO 审阅队列
+    await orderApi.submitOrder(orderId)
     router.push('/am/orders')
-  } catch (e: any) {
-    errors.value.submit = e?.message || '提交失败，请重试'
+  } catch (e) {
+    errors.value.submit = errorMessage(e, '提交失败，请重试')
   } finally {
     loading.value = false
     submitting.value = false
@@ -126,20 +158,18 @@ async function handleSubmit() {
 async function handleSaveDraft() {
   if (!validate()) return
   loading.value = true
+  errors.value.submit = ''
+  notice.value = ''
   try {
-    await orderApi.createOrder({
-      customer_name: form.customer_name.trim(),
-      use_scene: form.use_scene.trim(),
-      delivery_deadline: form.delivery_deadline,
-      remark: form.remark.trim() || undefined,
-      material_specs: form.material_specs.map((s) => ({
-        material_type: s.material_type,
-        spec_size: s.spec_size.trim(),
-      })),
-    })
+    const orderId = await ensureOrderCreated()
+    const upload = await uploaderRef.value?.uploadAll(orderId)
+    if (upload && upload.failed > 0) {
+      errors.value.submit = `${upload.failed} 个附件上传失败；请重试上传后再保存（订单 ${createdOrderNo.value} 不会重复创建）。`
+      return
+    }
     router.push('/am/orders')
-  } catch (e: any) {
-    errors.value.submit = e?.message || '保存失败'
+  } catch (e) {
+    errors.value.submit = errorMessage(e, '保存失败')
   } finally {
     loading.value = false
   }
@@ -225,13 +255,12 @@ const todayStr = computed(() => new Date().toISOString().slice(0, 10))
       </section>
 
       <section class="section">
-        <h2>附件 <span class="tag-todo">P1-T26 待实现</span></h2>
-        <div class="attach-placeholder">
-          <p>此处预留附件上传区域（Logo、参考图、品牌规范等）。</p>
-          <p class="muted">Phase 1 mock 暂不上传文件。后端对接后，在这里接入 file input → multipart 上传 → 将 file_id 写入订单。</p>
-        </div>
+        <h2>附件（可选）</h2>
+        <p class="section-hint">Logo、参考图、品牌规范等；提交时走预签名直传，文件不经过应用服务器。</p>
+        <AttachmentUploader ref="uploaderRef" :disabled="loading" />
       </section>
 
+      <p v-if="notice" class="notice">{{ notice }}</p>
       <p v-if="errors.submit" class="global-err">{{ errors.submit }}</p>
 
       <footer class="actions">
@@ -311,18 +340,14 @@ const todayStr = computed(() => new Date().toISOString().slice(0, 10))
 .btn-mini.danger { color: #f56c6c; border-color: #fbc4c4; }
 .btn-mini.danger:hover { background: #fef0f0; }
 
-.attach-placeholder {
-  background: #f7f9fc;
-  border: 1px dashed #dcdfe6;
-  border-radius: 6px;
-  padding: 16px;
-  color: #606266;
+.notice {
+  background: #fdf6ec;
+  color: #b88230;
+  border: 1px solid #faecd8;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
   font-size: 13px;
-}
-.attach-placeholder .muted { color: #999; margin: 4px 0 0; }
-.tag-todo {
-  font-size: 11px; padding: 1px 6px; background: #fdf6ec; color: #e6a23c;
-  border-radius: 3px; margin-left: 6px; border: 1px solid #faecd8;
 }
 
 .err { color: #f56c6c; font-size: 12px; display: block; margin-top: 4px; }

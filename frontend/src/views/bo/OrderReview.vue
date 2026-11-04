@@ -2,15 +2,19 @@
 /**
  * P1-T31 · BO 审阅 + 退回 + 派发 三合一页面
  *
- * TODO(后端就绪):
- *   - orderApi.rejectOrder / assignTask 自动走真实 POST
- *   - 派发时 assignee 改为从设计师 API 下拉选择，而非自由输入
- *   - 退回后写审计日志（后端强制）
+ * - A-04 审阅详情（真实接口）+ S-08 附件下载（302 → 预签名 GET）
+ * - A-05 退回订单 / A-06 派发任务（派发后自动生成物料任务）
+ * - A-29 操作时间线 + P4-T13 通知铃铛
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { orderApi, type OrderDetail } from '../../api/modules/order'
+import { userApi, type DesignerSummary } from '../../api/modules/user'
+import { attachmentApi } from '../../api/modules/attachment'
+import { errorMessage } from '../../api/http'
 import OrderStatusTag from '../../components/common/OrderStatusTag.vue'
+import NotificationBell from '../../components/common/NotificationBell.vue'
+import OrderTimeline from '../../components/common/OrderTimeline.vue'
 import { OrderStatus, RejectReasonType, Priority } from '../../types/enums'
 
 const route = useRoute()
@@ -28,11 +32,12 @@ const rejectSubmitting = ref(false)
 const rejectError = ref('')
 
 // 派发
-const assignAssigneeName = ref('')
+const assignAssigneeId = ref<number | null>(null)
 const assignDeadline = ref('')
 const assignPriority = ref<string>(Priority.MEDIUM)
 const assignSubmitting = ref(false)
 const assignError = ref('')
+const designers = ref<DesignerSummary[]>([]) 
 
 const reasonTypeOptions: { value: string; label: string }[] = [
   { value: RejectReasonType.INFORMATION_INCOMPLETE, label: '信息不完整' },
@@ -53,11 +58,15 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await orderApi.reviewOrder(orderId.value)
+    const [res, designerRes] = await Promise.all([
+      orderApi.reviewOrder(orderId.value),
+      userApi.listDesigners(),
+    ])
     detail.value = (res.data as OrderDetail) || null
+    designers.value = (designerRes.data as DesignerSummary[]) || []
     if (!detail.value) error.value = '订单不存在'
-  } catch (e: any) {
-    error.value = e?.message || '加载订单详情失败'
+  } catch (e) {
+    error.value = errorMessage(e, '加载订单详情失败')
   } finally {
     loading.value = false
   }
@@ -74,8 +83,8 @@ async function handleReject() {
     await orderApi.rejectOrder(orderId.value, rejectReasonType.value, rejectRemark.value.trim())
     // 退回成功 → 返回待审阅列表（原订单会因状态变化从队列消失或重新排队）
     router.push('/bo/review')
-  } catch (e: any) {
-    rejectError.value = e?.message || '退回失败'
+  } catch (e) {
+    rejectError.value = errorMessage(e, '退回失败')
   } finally {
     rejectSubmitting.value = false
   }
@@ -83,26 +92,26 @@ async function handleReject() {
 
 async function handleAssign() {
   assignError.value = ''
-  if (!assignAssigneeName.value.trim()) {
-    assignError.value = '请输入设计师姓名'
+  if (!assignAssigneeId.value) {
+    assignError.value = '请选择设计师'
     return
   }
   if (!assignDeadline.value) {
-    assignError.value = '请选择任务截止日期'
+    assignError.value = '请选择任务截止时间'
     return
   }
   assignSubmitting.value = true
   try {
     await orderApi.assignTask(orderId.value, {
-      assignee_id: 3,
-      assignee_name: assignAssigneeName.value.trim(),
-      task_deadline: new Date(assignDeadline.value).toISOString(),
+      assignee_id: assignAssigneeId.value,
+      // datetime-local 输出 YYYY-MM-DDTHH:mm，后端 LocalDateTime 可直接解析
+      task_deadline: assignDeadline.value,
       priority: assignPriority.value,
     })
-    // 派发成功 → 订单进入生产中，返回列表
-    router.push('/bo/review')
-  } catch (e: any) {
-    assignError.value = e?.message || '派发失败'
+    // 派发成功 → 订单进入生产中，直接进入内部评审
+    router.push(`/bo/internal-review/${orderId.value}`)
+  } catch (e) {
+    assignError.value = errorMessage(e, '派发失败')
   } finally {
     assignSubmitting.value = false
   }
@@ -110,6 +119,34 @@ async function handleAssign() {
 
 const canReject = computed(() => detail.value?.status === OrderStatus.PENDING_CONFIRM)
 const canAssign = computed(() => detail.value?.status === OrderStatus.PENDING_CONFIRM)
+/** 派发后订单进入 IN_PRODUCTION，此时可查看版本并做内部评审放行/退回 */
+const canReviewVersions = computed(
+  () =>
+    detail.value?.status === OrderStatus.IN_PRODUCTION ||
+    detail.value?.status === OrderStatus.COMPLETED
+)
+
+// --- S-08 附件下载 ---
+const downloadingId = ref<number | null>(null)
+const attachmentError = ref('')
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${bytes} B`
+}
+
+async function downloadAttachment(a: { id: number; file_name: string }) {
+  attachmentError.value = ''
+  downloadingId.value = a.id
+  try {
+    await attachmentApi.download(a.id, a.file_name)
+  } catch (e) {
+    attachmentError.value = errorMessage(e, '附件下载失败')
+  } finally {
+    downloadingId.value = null
+  }
+}
 
 onMounted(load)
 </script>
@@ -124,6 +161,7 @@ onMounted(load)
       <div class="header-meta">
         <span v-if="detail" class="mono">{{ detail.order_no }}</span>
         <template v-if="detail"><OrderStatusTag :status="detail.status" /></template>
+        <NotificationBell />
       </div>
     </header>
 
@@ -178,13 +216,34 @@ onMounted(load)
         <ul v-if="detail.attachments?.length" class="attach-list">
           <li v-for="a in detail.attachments" :key="a.id">
             <span class="fname">{{ a.file_name }}</span>
-            <span class="muted">{{ (a.file_size / 1024 / 1024).toFixed(1) }} MB</span>
+            <span class="attach-meta">
+              <span class="muted">{{ formatSize(a.file_size) }}</span>
+              <button
+                class="btn ghost small"
+                :disabled="downloadingId === a.id"
+                @click="downloadAttachment(a)"
+              >{{ downloadingId === a.id ? '下载中…' : '下载' }}</button>
+            </span>
           </li>
         </ul>
         <p v-else class="muted">（无附件）</p>
+        <p v-if="attachmentError" class="err">{{ attachmentError }}</p>
       </section>
 
       <!-- BO 操作面板 -->
+      <!-- 派发后：进入内部评审 -->
+      <section v-if="canReviewVersions" class="card">
+        <h2>内部评审</h2>
+        <p class="hint">
+          订单已进入生产，设计任务正在推进。可进入内部评审查看版本对比、放行或退回。
+        </p>
+        <div class="btn-row">
+          <button class="btn primary" @click="router.push(`/bo/internal-review/${orderId}`)">
+            进入内部评审 →
+          </button>
+        </div>
+      </section>
+
       <section v-if="canReject || canAssign" class="action-grid">
         <!-- 退回 -->
         <div class="card action-card reject-card">
@@ -215,12 +274,17 @@ onMounted(load)
           <h2>派发设计任务</h2>
           <p class="hint">派发后订单进入"生产中"，每条物料规格自动生成一条设计任务。</p>
           <label class="field">
-            <span>设计师姓名 <em>*</em></span>
-            <input v-model="assignAssigneeName" type="text" placeholder="如：李设计" />
+            <span>设计师 <em>*</em></span>
+            <select v-model="assignAssigneeId">
+              <option :value="null" disabled>请选择设计师</option>
+              <option v-for="designer in designers" :key="designer.id" :value="designer.id">
+                {{ designer.name }}（{{ designer.username }}）
+              </option>
+            </select>
           </label>
           <label class="field">
-            <span>任务截止日期 <em>*</em></span>
-            <input v-model="assignDeadline" type="date" />
+            <span>任务截止时间 <em>*</em></span>
+            <input v-model="assignDeadline" type="datetime-local" />
           </label>
           <label class="field">
             <span>优先级</span>
@@ -239,9 +303,12 @@ onMounted(load)
         </div>
       </section>
 
-      <section v-else class="card">
+      <section v-else-if="!canReviewVersions" class="card">
         <p class="muted">订单当前状态为"{{ detail.status }}"，无可执行的审阅操作。</p>
       </section>
+
+      <!-- P4-T14 · A-29 操作时间线 -->
+      <OrderTimeline :order-id="Number(route.params.orderId)" />
     </template>
   </div>
 </template>
@@ -281,6 +348,7 @@ onMounted(load)
   padding: 8px 12px; background: #fafbfc; border-radius: 4px; margin-bottom: 6px;
 }
 .fname { font-family: Menlo, Consolas, monospace; font-size: 13px; }
+.attach-meta { display: flex; align-items: center; gap: 12px; }
 
 .action-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
 .action-grid .card { margin-bottom: 0; }

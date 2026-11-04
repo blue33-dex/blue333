@@ -746,4 +746,25 @@ Phase 1 交付后，系统形成**可独立运行的最小可测闭环**：
 
 ---
 
+## 实现状态（2026-11-04 缺口补齐）
+
+Phase 1 主体在 P1-T01 ~ P1-T40 交付时已完成，本轮补齐审计发现的 4 项缺口：
+
+| 缺口 | 原任务 | 本次交付 | 验证 |
+|---|---|---|---|
+| ① 附件直传组件缺失（后端 presign/confirm 已就绪，前端只有占位符）| P1-T26 | 新增 `frontend/src/api/modules/attachment.ts`（presign / confirm / S-08 download + 前端 200 MB/扩展名预校验）、`frontend/src/composables/useDirectUpload.ts`（三步 + 1s/2s/4s 指数退避重试 3 次 + XHR 进度）、`frontend/src/components/common/AttachmentUploader.vue`（多文件、逐文件进度/重试/移除）；接入 `views/am/CreateOrder.vue`（A-01 → 直传 → A-03，附件失败时不重复建单）与 `views/OrderDetail.vue`（AM + PENDING_CONFIRM 可继续上传）| `npm run build` 通过；`infra/scripts/e2e-phase1.ps1` 覆盖 presign/PUT/confirm/302 下载 |
+| ② S-08 附件下载 UI 未接 | P1-T21 / P1-T29 / P1-T32 | 三角色下载入口：`views/OrderDetail.vue`（AM/BO/DS）、`views/bo/OrderReview.vue`（BO）、`views/ds/TaskDetail.vue`（DS 客户参考素材）；统一 blob 下载 + 失败提示 | 同上（E2E 已有 302 + 内容一致性断言）|
+| ③ XSS / 隐私脱敏测试缺失 | P1-T39 | 新增 `backend/src/test/java/com/blue333/ordermgmt/util/XSSCleanerTest.java`（8 例）与 `PrivacyMaskTest.java`（10 例）| `mvn -o test` 164/164 通过（原 146 + 新增 18）|
+| ④ 死代码与过期 TODO | P1-T26/T27/T30/T31 等 | 删除 `api/modules/order.ts` 中无调用方的 `getKanban()`；清理 `CreateOrder.vue`、`OrderDetail.vue`、`OrderReview.vue`、`PendingReviewList.vue`、`am/MyOrderList.vue`、`LoginView.vue` 的过期 TODO 注释 | `npm run build`（vue-tsc）通过 |
+
+### 决策与已知偏差
+
+1. **附件只能在订单存在后上传**：presign/confirm 要求订单处于 `PENDING_CONFIRM`，因此创建订单页采用「先暂存文件 → A-01 创建成功后调用 `uploadAll(orderId)`」；若附件失败，订单已创建（保留 `createdOrderId`），再次提交只补传失败文件，不会重复建单。
+2. **提交前不阻塞附件失败**：`A-03 submitOrder` 不改变订单状态（仍为 `PENDING_CONFIRM`），附件可在提交后继续补传；但为满足「上传成功再送审」的验收预期，前端在附件失败时停在表单页提示重试。
+3. **隐私脱敏暂无实际出参**：`User` 实体虽有 `email` / `phone`，但当前所有 API（登录 `AuthenticatedUserResponse`、设计师列表 `DesignerSummary`）均未返回联系方式，`PrivacyMask` 无生产调用点，本轮以单元测试锁定脱敏规则（`138****8888` / `z***@example.com`）；后续若开放联系方式视图，必须在这类出参处调用它。
+4. **Swagger UI 未交付（偏差）**：离线 Maven 仓库（`blue333-maven-repo` 卷）没有 `org.springdoc` 依赖，且环境无法访问外网，无法引入 springdoc-openapi。当前 API 契约以 E2E 脚本与 `docs/GLOSSARY` 为准；如后续开放网络，可按下方步骤补：在 `backend/pom.xml` 增加 `springdoc-openapi-starter-webmvc-ui`，放行 `/v3/api-docs/**`、`/swagger-ui/**`，访问 `http://localhost:8081/swagger-ui/index.html`（经 nginx 代理）。
+5. **Mock 模式不支持真实上传**：`VITE_USE_MOCK=true` 时 mock adapter 无 presign/confirm 路由，上传会提示失败；默认（`VITE_USE_MOCK` 未设置）走真实后端。
+
+---
+
 > **Phase 1 文档结束**。Phase 2~4 文档按本模式从 TASK_BREAKDOWN.md 派生，粒度与 Phase 1 保持一致。

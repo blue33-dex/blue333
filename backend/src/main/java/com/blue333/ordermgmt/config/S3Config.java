@@ -8,29 +8,34 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(MinioProperties.class)
-public class MinioConfig {
-  @Bean("minioInternalClient")
-  MinioClient minioInternalClient(MinioProperties properties) {
+@EnableConfigurationProperties(S3Properties.class)
+public class S3Config {
+  @Bean("s3InternalClient")
+  MinioClient s3InternalClient(S3Properties properties) {
     validateProperties(properties);
     return client(properties.endpoint(), properties);
   }
 
-  @Bean("minioPresignClient")
-  MinioClient minioPresignClient(MinioProperties properties) {
+  @Bean("s3PresignClient")
+  MinioClient s3PresignClient(S3Properties properties) {
     validateProperties(properties);
     return client(properties.publicEndpoint(), properties);
   }
 
-  private MinioClient client(String endpoint, MinioProperties properties) {
+  /**
+   * A fixed region stops the client from calling GetBucketLocation before signing. That lookup
+   * would fail for the presign client, whose public endpoint is not reachable from the container.
+   */
+  private MinioClient client(String endpoint, S3Properties properties) {
     return MinioClient.builder().endpoint(endpoint)
+        .region(properties.region())
         .credentials(properties.accessKey(), properties.secretKey()).build();
   }
 
-  private void validateProperties(MinioProperties properties) {
+  private void validateProperties(S3Properties properties) {
     if (isBlank(properties.endpoint()) || isBlank(properties.publicEndpoint()) || isBlank(properties.accessKey())
         || isBlank(properties.secretKey()) || isBlank(properties.bucket())) {
-      throw new IllegalStateException("MinIO endpoint, credentials, and bucket must be configured");
+      throw new IllegalStateException("S3 endpoint, credentials, and bucket must be configured");
     }
     validateEndpoint(properties.endpoint());
     validateEndpoint(properties.publicEndpoint());
@@ -40,7 +45,7 @@ public class MinioConfig {
     URI endpoint = URI.create(rawEndpoint);
     if (!"http".equalsIgnoreCase(endpoint.getScheme()) && !"https".equalsIgnoreCase(endpoint.getScheme())
         || isBlank(endpoint.getHost())) {
-      throw new IllegalStateException("MinIO endpoint must be an HTTP(S) URL with a host");
+      throw new IllegalStateException("S3 endpoint must be an HTTP(S) URL with a host");
     }
   }
 

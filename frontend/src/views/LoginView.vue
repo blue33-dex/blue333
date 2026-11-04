@@ -2,9 +2,7 @@
 /**
  * P1-T25 · 登录页
  *
- * TODO(P1-T25) 后端就绪后：
- *   - 保持 http.post('/auth/login') 不变（USE_MOCK=false 时自动打真实后端）
- *   - 将 setAuth 的 mock token 解析改为直接用后端返回的 JWT
+ * POST /api/v1/auth/login 走真实后端（USE_MOCK=false 默认）；成功后保存 JWT 与用户角色。
  */
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'

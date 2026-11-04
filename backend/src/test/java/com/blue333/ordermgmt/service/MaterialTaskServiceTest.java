@@ -23,6 +23,7 @@ import com.blue333.ordermgmt.domain.enums.OrderStatus;
 import com.blue333.ordermgmt.domain.enums.Priority;
 import com.blue333.ordermgmt.domain.enums.RoleType;
 import com.blue333.ordermgmt.event.TaskAssignedEvent;
+import com.blue333.ordermgmt.event.TaskReassignedEvent;
 import com.blue333.ordermgmt.repository.AssignmentRepository;
 import com.blue333.ordermgmt.repository.MaterialSpecRepository;
 import com.blue333.ordermgmt.repository.MaterialTaskRepository;
@@ -99,7 +100,7 @@ class MaterialTaskServiceTest {
     ArgumentCaptor<Assignment> assignments = ArgumentCaptor.forClass(Assignment.class);
     verify(assignmentRepository, times(2)).save(assignments.capture());
     assertThat(assignments.getAllValues()).allSatisfy(assignment -> {
-      assertThat(assignment.getAssignmentType()).isEqualTo(Assignment.INITIAL_ASSIGNMENT_TYPE);
+      assertThat(assignment.getAssignmentType()).isEqualTo(com.blue333.ordermgmt.domain.enums.AssignmentType.INITIAL);
       assertThat(assignment.getAssigner()).isSameAs(bo);
       assertThat(assignment.getAssignee()).isSameAs(ds);
       assertThat(assignment.getRemark()).doesNotContain("<", ">");
@@ -166,6 +167,99 @@ class MaterialTaskServiceTest {
         .isEqualTo(MaterialTaskStatus.CANCELLED);
     assertThatThrownBy(() -> service.cancelTask(10L, "Second cancellation"))
         .isInstanceOf(InvalidStateTransitionException.class);
+  }
+
+  @Test
+  void reassignsTaskRecordsHandoverAndNotifiesBothDesigners() {
+    MaterialTask task = assignedTask(Priority.LOW);
+    order.changeStatus(OrderStatus.IN_PRODUCTION);
+    User newDesigner = enabledUser(5L, RoleType.DS);
+    when(materialTaskRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(task));
+
+    MaterialTask saved = service.reassignTask(10L, bo, newDesigner, null, Priority.HIGH, "<b>On leave</b>");
+
+    assertThat(saved.getAssignee()).isSameAs(newDesigner);
+    assertThat(saved.getTaskDeadline()).isEqualTo(DEADLINE);
+    assertThat(saved.getPriority()).isEqualTo(Priority.HIGH);
+    assertThat(saved.getStatus()).isEqualTo(MaterialTaskStatus.PENDING_DESIGN);
+
+    ArgumentCaptor<Assignment> assignments = ArgumentCaptor.forClass(Assignment.class);
+    verify(assignmentRepository).save(assignments.capture());
+    Assignment assignment = assignments.getValue();
+    assertThat(assignment.getAssignmentType())
+        .isEqualTo(com.blue333.ordermgmt.domain.enums.AssignmentType.REASSIGN);
+    assertThat(assignment.getPreviousAssignee()).isSameAs(ds);
+    assertThat(assignment.getAssignee()).isSameAs(newDesigner);
+    assertThat(assignment.getAssigner()).isSameAs(bo);
+    assertThat(assignment.getRemark()).isEqualTo("On leave");
+    assertThat(assignment.getTaskDeadline()).isEqualTo(DEADLINE);
+    assertThat(assignment.getPriority()).isEqualTo(Priority.HIGH);
+
+    ArgumentCaptor<TaskReassignedEvent> events = ArgumentCaptor.forClass(TaskReassignedEvent.class);
+    verify(eventPublisher).publishEvent(events.capture());
+    assertThat(events.getValue().recipientIds()).containsExactly(5L);
+    assertThat(events.getValue().previousAssigneeId()).isEqualTo(DS_ID);
+    assertThat(events.getValue().deadline()).isEqualTo(DEADLINE);
+  }
+
+  @Test
+  void reassignKeepsDeadlineAndPriorityWhenTheyAreOmitted() {
+    MaterialTask task = assignedTask(Priority.LOW);
+    order.changeStatus(OrderStatus.IN_PRODUCTION);
+    User newDesigner = enabledUser(5L, RoleType.DS);
+    when(materialTaskRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(task));
+
+    service.reassignTask(10L, bo, newDesigner, null, null, "Workload rebalance");
+
+    assertThat(task.getTaskDeadline()).isEqualTo(DEADLINE);
+    assertThat(task.getPriority()).isEqualTo(Priority.LOW);
+  }
+
+  @Test
+  void reassignRequiresReasonAndADifferentEnabledDesignerFromABo() {
+    MaterialTask task = assignedTask(Priority.MEDIUM);
+    order.changeStatus(OrderStatus.IN_PRODUCTION);
+    when(materialTaskRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(task));
+    User anotherBo = enabledUser(4L, RoleType.BO);
+    User anotherDesigner = enabledUser(5L, RoleType.DS);
+
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> service.reassignTask(10L, bo, anotherDesigner, null, null, "  "));
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> service.reassignTask(10L, bo, ds, null, null, "Same designer"));
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> service.reassignTask(10L, bo, anotherBo, null, null, "Not a designer"));
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> service.reassignTask(10L, ds, anotherDesigner, null, null, "Not a BO"));
+    verify(assignmentRepository, never()).save(any());
+    assertThat(task.getAssignee()).isSameAs(ds);
+  }
+
+  @Test
+  void reassignRejectsTerminalTasksAndOrdersOutsideProduction() {
+    MaterialTask cancelled = assignedTask(Priority.MEDIUM);
+    cancelled.changeStatus(MaterialTaskStatus.CANCELLED);
+    order.changeStatus(OrderStatus.IN_PRODUCTION);
+    when(materialTaskRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(cancelled));
+    User newDesigner = enabledUser(5L, RoleType.DS);
+
+    assertThatThrownBy(() -> service.reassignTask(10L, bo, newDesigner, null, null, "Handover"))
+        .isInstanceOf(InvalidStateTransitionException.class);
+
+    Order pendingOrder = Order.create("ORD-20261103-002", "Customer", "Campaign",
+        LocalDate.of(2026, 12, 20), null, mock(User.class));
+    MaterialTask pendingTask = MaterialTask.create(pendingOrder,
+        MaterialSpec.create(pendingOrder, MaterialType.POSTER, "A3"), ds, DEADLINE, Priority.MEDIUM);
+    when(materialTaskRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(pendingTask));
+
+    assertThatThrownBy(() -> service.reassignTask(11L, bo, newDesigner, null, null, "Handover"))
+        .isInstanceOf(InvalidStateTransitionException.class);
+    verify(assignmentRepository, never()).save(any());
+  }
+
+  private MaterialTask assignedTask(Priority priority) {
+    return MaterialTask.create(order, MaterialSpec.create(order, MaterialType.POSTER, "A3"),
+        ds, DEADLINE, priority);
   }
 
   private User enabledUser(Long id, RoleType roleType) {

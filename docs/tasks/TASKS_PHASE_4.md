@@ -327,3 +327,49 @@ Phase 内部可并行：
 ---
 
 **所有任务拆解文档已完成**。TASK_BREAKDOWN.md 为主索引（含追溯矩阵 + 依赖 + 冲突记录），TASKS_PHASE_1.md 为完整详细任务说明（40 Task × 每 Task 完整字段），TASKS_PHASE_2 ~ TASKS_PHASE_4 按主索引派生（22 + 21 + 24 Task × 核心字段）。**合计 107 个 Task + 3 个已解决冲突 + 6 个待确认问题**。请人工审核后再开始执行。
+
+---
+
+## 实现状态（2026-11-04 完成）
+
+### 交付范围
+
+| Task | 状态 | 实现位置 |
+|---|---|---|
+| P4-T01 异常表迁移 | ✅ | `backend/src/main/resources/db/migration/V8__phase4_exception_tables.sql` |
+| P4-T02 ExceptionStatus/ExceptionType | ✅ | `domain/enums/ExceptionStatus.java`、`ExceptionType.java`（TS 已同步 `frontend/src/types/enums.ts`）|
+| P4-T03 ExceptionRecord 实体 + 仓库 | ✅ | `domain/ExceptionRecord.java`、`repository/ExceptionRecordRepository.java` |
+| P4-T04 ExceptionRecordService（A-20/A-21） | ✅ | `service/ExceptionRecordService.java` |
+| P4-T05 逾期自动异常（每日 04:00） | ✅ | `service/ExceptionAutoGenerator.java` |
+| P4-T06 归档前置校验（未关闭异常 → 422） | ✅ | `ArchiveService.archiveOrder` 内调用 `requireAllClosed` |
+| P4-T07 看板 A-25 | ✅ | `service/KanbanService.java`、`GET /orders/kanban` |
+| P4-T08 时间线 A-29 | ✅ | `service/TimelineService.java`、`GET /orders/{id}/timeline` |
+| P4-T09 SSE 通知推送 | ✅ | `service/NotificationStreamService.java`、`GET /notifications/stream` |
+| P4-T10 异常 Controller + A-22 级联取消 | ✅ | `controller/ExceptionController.java`、`OrderService.cancelOrder` |
+| P4-T11 孤儿对象清理（每日 03:00） | ✅ | `service/OrphanObjectCleaner.java`、`POST /storage/cleanup-orphans` |
+| P4-T12 前端 API | ✅ | `frontend/src/api/modules/phase4.ts`（含 SSE fetch 流）|
+| P4-T13 看板页 | ✅ | `frontend/src/views/bo/OrderKanban.vue`（`/bo/kanban`）|
+| P4-T14 时间线组件 | ✅ | `frontend/src/components/common/OrderTimeline.vue`（订单详情 / BO 审阅页内嵌，支持导出 txt）|
+| P4-T15 BO 异常管理页 | ✅ | `frontend/src/views/bo/ExceptionRecords.vue`（`/bo/exceptions`）|
+| P4-T16 通知中心 UI | ✅ | `frontend/src/components/common/NotificationBell.vue`（铃铛 + 下拉 + SSE 实时 + 未读计数）|
+| P4-T17~T24 单测 / E2E | ✅ | 146 个后端单测、`infra/scripts/e2e-phase4.ps1`（54 项断言）|
+
+### 关键决策与偏差说明
+
+1. **迁移编号使用 V8**：文档中的 `V5__phase4_exception_tables.sql` 与仓库现状冲突（V3~V7 已被 Phase 2/3 占用），实际文件为 `V8__phase4_exception_tables.sql`，已在 Flyway 历史中成功应用。
+2. **`recorder_id` 可空**：P4-T05 自动生成的 DELAY 记录没有记录人，前端展示为「系统」；手动记录仍写入 BO 用户。
+3. **`task_id` 可空**：用于按 `(task_id, exception_type)` 去重，避免每日扫描重复生成同一条逾期异常。
+4. **ExceptionType 当前实现 2 个**：`DELAY` / `OTHER`。文档列举的 `CUSTOMER_COMPLAINT / QUALITY_ISSUE / STAFF_CHANGE / SPEC_CHANGE` 在 Phase 4 范围内未启用（枚举可无迁移成本追加）；如需要可后续补充并同步前端下拉。
+5. **SSE 而非 WebSocket**：`EventSource` 无法携带 `Authorization` 头，前端使用 `fetch` + `ReadableStream` 手工解析 SSE；后端 30 分钟超时 + 25 秒 comment 心跳，`nginx` 新增 `location = /api/v1/notifications/stream`（`proxy_buffering off`、`proxy_read_timeout 3600s`）。
+6. **运维/测试端点**：`POST /exceptions/auto-scan`（BO，立即执行逾期扫描）、`POST /storage/cleanup-orphans`（BO，立即执行孤儿清理），便于演示与 E2E，不影响定时任务。
+7. **A-22 取消规则**：AM 仅可取消自己的 `PENDING_CONFIRM` 订单（reason 可选）；BO 仅可取消 `IN_PRODUCTION` 订单且 reason 必填（`400`）；终态订单 `409`；取消时级联所有非 `APPROVED/CANCELLED` 任务为 `CANCELLED`，并逐任务记录 `CANCEL_TASK` 审计。
+8. **看板读模型**：每列固定返回最近 50 张轻量卡（`total` 由聚合查询给出），任务数 / 未解决反馈数通过两次批量聚合避免 N+1；客户名经 `XSSCleaner` 清洗并截断。
+9. **时间线**：单条 JPQL 覆盖 `ORDER` + `MATERIAL_TASK` / `DESIGN_VERSION` / `FEEDBACK_ITEM` / `CONFIRMATION_RECORD` / `EXCEPTION_RECORD` 子查询，`id` 升序游标分页，可见性复用 `AccessControlService.findVisibleOrder`（BR-13）。
+10. **孤儿清理**：托管前缀 `attachments/`、`versions/`、`archives/`；未引用且超过 `app.orphan-cleanup.min-age-hours`（默认 24h）的对象先复制到 `orphan/` 再删除原键；`orphan/` 超过 `quarantine-retention-days`（默认 7 天）后清除。`ORPHAN_CLEANUP_ENABLED=false` 可关闭定时执行。
+
+### 验证结果
+
+- 后端单测：`mvn -o test` → **146/146 通过**（新增 ExceptionRecordService / ExceptionAutoGenerator / KanbanService / TimelineService / NotificationService / NotificationStreamService / OrphanObjectCleaner / OrderService 级联取消 / ArchiveService 422 等用例）。
+- Phase 4 E2E：`infra/scripts/e2e-phase4.ps1` → **54/54 通过**（覆盖 A-20/A-21/A-25/A-29/A-22、逾期扫描幂等、归档 422 门禁、通知读/全部已读、SSE 经 nginx、孤儿清理、权限 403/404、审计与 DB 断言）。
+- 回归：`e2e-phase1` / `e2e-design-versions` / `e2e-internal-review` / `e2e-reassign` / `e2e-phase3` 全部通过。
+- 前端：`npm run build` 通过；Vite 代理冒烟（`/orders/kanban`、`/notifications/unread-count`）返回真实后端数据。

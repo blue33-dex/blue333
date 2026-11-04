@@ -12,8 +12,8 @@ import axios, { type AxiosInstance, type InternalAxiosRequestConfig, type AxiosR
 import { useAuthStore } from '../stores/auth'
 import { mockAdapter } from './mock-adapter'
 
-// --- Mock 开关（Phase 1 后端未就绪时默认 true）---
-export const USE_MOCK = true // TODO: 后端就绪后改为 false
+// --- Mock 开关（P2-T16：默认接真实后端；离线演示时设置 VITE_USE_MOCK=true）---
+export const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 
 /** 统一后端响应包裹结构（对齐 GLOSSARY REST API 规范）*/
 export interface ApiResponse<T = unknown> {
@@ -125,5 +125,11 @@ http.interceptors.response.use(
     return Promise.reject(err)
   }
 )
+
+/** 从 axios 错误中提取后端 message，供页面直接展示 */
+export function errorMessage(err: unknown, fallback = '请求失败，请稍后重试'): string {
+  const anyErr = err as { response?: { data?: { message?: string } }; message?: string }
+  return anyErr?.response?.data?.message || anyErr?.message || fallback
+}
 
 export default http

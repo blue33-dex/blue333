@@ -13,6 +13,7 @@ import com.blue333.ordermgmt.domain.enums.OrderStatus;
 import com.blue333.ordermgmt.domain.enums.Priority;
 import com.blue333.ordermgmt.domain.enums.RoleType;
 import com.blue333.ordermgmt.event.TaskAssignedEvent;
+import com.blue333.ordermgmt.event.TaskReassignedEvent;
 import com.blue333.ordermgmt.repository.AssignmentRepository;
 import com.blue333.ordermgmt.repository.MaterialSpecRepository;
 import com.blue333.ordermgmt.repository.MaterialTaskRepository;
@@ -23,15 +24,23 @@ import com.blue333.ordermgmt.util.XSSCleaner;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/** Transactional core for initial per-material task assignment and task cancellation. */
+/** Transactional core for initial per-material task assignment, handover and task cancellation. */
 @Service
 public class MaterialTaskService {
+  /** A-07 handover is possible while the task still has work ahead; terminal tasks cannot be reassigned. */
+  private static final Set<MaterialTaskStatus> REASSIGNABLE_STATUSES = Set.of(
+      MaterialTaskStatus.PENDING_DESIGN, MaterialTaskStatus.PENDING_APPROVAL,
+      MaterialTaskStatus.PENDING_REVISE);
+  private static final int MAX_REMARK_LENGTH = 5000;
+
   private final OrderRepository orderRepository;
   private final MaterialSpecRepository materialSpecRepository;
   private final MaterialTaskRepository materialTaskRepository;
@@ -122,6 +131,56 @@ public class MaterialTaskService {
     MaterialTask task = findTaskForUpdate(taskId);
     taskStateMachine.transition(task, MaterialTaskStatus.CANCELLED);
     return materialTaskRepository.save(task);
+  }
+
+  /**
+   * A-07 (EC-D): hands a task over to another designer and records a REASSIGN assignment row with the
+   * previous assignee. The deadline and priority are kept unless the caller supplies new values.
+   */
+  @Transactional
+  @AuditedAction(action = AuditActionType.REASSIGN_TASK, targetType = AuditTargetType.MATERIAL_TASK,
+      targetId = "#taskId", remark = "T(com.blue333.ordermgmt.util.XSSCleaner).clean(#reason)")
+  public MaterialTask reassignTask(
+      Long taskId,
+      User assigner,
+      User newAssignee,
+      LocalDateTime taskDeadline,
+      Priority priority,
+      String reason) {
+    String cleanReason = requireText(cleanOptional(reason), "A reassignment reason is required");
+    if (cleanReason.length() > MAX_REMARK_LENGTH) {
+      throw new IllegalArgumentException(
+          "reason must be at most " + MAX_REMARK_LENGTH + " characters");
+    }
+    MaterialTask task = findTaskForUpdate(taskId);
+    User persistedAssigner = requirePersistedEnabledUser(assigner, "assigner");
+    requireRole(persistedAssigner, RoleType.BO, "Only a business owner (BO) can reassign tasks");
+    if (task.getOrder().getStatus() != OrderStatus.IN_PRODUCTION) {
+      throw new InvalidStateTransitionException("Tasks can only be reassigned while the order is in production");
+    }
+    if (!REASSIGNABLE_STATUSES.contains(task.getStatus())) {
+      throw new InvalidStateTransitionException(
+          "Task cannot be reassigned in status " + task.getStatus());
+    }
+
+    User previousAssignee = task.getAssignee();
+    User persistedAssignee = requirePersistedEnabledUser(newAssignee, "assignee");
+    requireRole(persistedAssignee, RoleType.DS, "The assignee must be a designer (DS)");
+    if (previousAssignee != null
+        && Objects.equals(previousAssignee.getId(), persistedAssignee.getId())) {
+      throw new IllegalArgumentException("The task is already assigned to this designer");
+    }
+    LocalDateTime effectiveDeadline = taskDeadline == null ? task.getTaskDeadline() : taskDeadline;
+    Priority effectivePriority = priority == null ? task.getPriority() : priority;
+
+    task.reassign(persistedAssignee, effectiveDeadline, effectivePriority);
+    MaterialTask saved = materialTaskRepository.save(task);
+    assignmentRepository.save(Assignment.reassigned(saved, persistedAssigner, persistedAssignee,
+        previousAssignee, effectiveDeadline, effectivePriority, cleanReason));
+    publishAfterCommit(new TaskReassignedEvent(List.of(persistedAssignee.getId()),
+        previousAssignee == null ? null : previousAssignee.getId(), saved.getId(),
+        task.getOrder().getOrderNo(), effectiveDeadline));
+    return saved;
   }
 
   private Order findOrderForUpdate(Long orderId) {

@@ -1,12 +1,23 @@
 package com.blue333.ordermgmt.service;
 
-import com.blue333.ordermgmt.config.MinioProperties;
+import com.blue333.ordermgmt.config.S3Properties;
 import com.blue333.ordermgmt.dto.storage.PresignedUrlResponse;
+import io.minio.CopyObjectArgs;
+import io.minio.CopySource;
 import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
+import io.minio.messages.Item;
+import java.io.ByteArrayInputStream;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,17 +32,17 @@ public class FileStorageService {
 
   private final MinioClient internalMinioClient;
   private final MinioClient presignMinioClient;
-  private final MinioProperties properties;
+  private final S3Properties properties;
 
   /** Convenience constructor for a single endpoint, retained for unit tests and non-container deployments. */
-  public FileStorageService(MinioClient minioClient, MinioProperties properties) {
+  public FileStorageService(MinioClient minioClient, S3Properties properties) {
     this(minioClient, minioClient, properties);
   }
 
   @org.springframework.beans.factory.annotation.Autowired
-  public FileStorageService(@org.springframework.beans.factory.annotation.Qualifier("minioInternalClient") MinioClient internalMinioClient,
-      @org.springframework.beans.factory.annotation.Qualifier("minioPresignClient") MinioClient presignMinioClient,
-      MinioProperties properties) {
+  public FileStorageService(@org.springframework.beans.factory.annotation.Qualifier("s3InternalClient") MinioClient internalMinioClient,
+      @org.springframework.beans.factory.annotation.Qualifier("s3PresignClient") MinioClient presignMinioClient,
+      S3Properties properties) {
     this.internalMinioClient = internalMinioClient;
     this.presignMinioClient = presignMinioClient;
     this.properties = properties;
@@ -74,6 +85,80 @@ public class FileStorageService {
     } catch (Exception exception) {
       throw new FileStorageException("Could not inspect stored object", exception);
     }
+  }
+
+  /**
+   * Stores server-generated content (the A-19 archive PDF) through the internal endpoint. User
+   * uploads keep using presigned PUT so bytes never pass through the application.
+   */
+  public void putObject(String objectKey, byte[] content, String contentType) {
+    validateObjectKey(objectKey);
+    if (content == null || content.length == 0) {
+      throw new IllegalArgumentException("Object content must not be empty");
+    }
+    if (contentType == null || contentType.isBlank()) {
+      throw new IllegalArgumentException("Content type is required");
+    }
+    try {
+      internalMinioClient.putObject(PutObjectArgs.builder()
+          .bucket(properties.bucket())
+          .object(objectKey)
+          .stream(new ByteArrayInputStream(content), content.length, -1)
+          .contentType(contentType)
+          .build());
+    } catch (Exception exception) {
+      throw new FileStorageException("Could not store object", exception);
+    }
+  }
+
+  /**
+   * Lists every object under a prefix. Used by the orphan sweep (P4-T11); the caller compares the
+   * keys with the database before touching anything.
+   */
+  public List<StoredObject> listObjects(String prefix) {
+    List<StoredObject> objects = new ArrayList<>();
+    try {
+      Iterable<io.minio.Result<Item>> results = internalMinioClient.listObjects(
+          ListObjectsArgs.builder().bucket(properties.bucket()).prefix(prefix).recursive(true).build());
+      for (io.minio.Result<Item> result : results) {
+        Item item = result.get();
+        objects.add(new StoredObject(item.objectName(), item.size(),
+            item.lastModified() == null ? null
+                : item.lastModified().withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()));
+      }
+      return objects;
+    } catch (Exception exception) {
+      throw new FileStorageException("Could not list stored objects", exception);
+    }
+  }
+
+  /** Server-side copy used to park an orphan under the quarantine prefix before deleting the original. */
+  public void copyObject(String sourceKey, String targetKey) {
+    validateObjectKey(sourceKey);
+    validateObjectKey(targetKey);
+    try {
+      internalMinioClient.copyObject(CopyObjectArgs.builder()
+          .bucket(properties.bucket())
+          .object(targetKey)
+          .source(CopySource.builder().bucket(properties.bucket()).object(sourceKey).build())
+          .build());
+    } catch (Exception exception) {
+      throw new FileStorageException("Could not copy stored object", exception);
+    }
+  }
+
+  public void removeObject(String objectKey) {
+    validateObjectKey(objectKey);
+    try {
+      internalMinioClient.removeObject(RemoveObjectArgs.builder()
+          .bucket(properties.bucket()).object(objectKey).build());
+    } catch (Exception exception) {
+      throw new FileStorageException("Could not remove stored object", exception);
+    }
+  }
+
+  /** Bucket listing row; {@code lastModified} is expressed in UTC to match the injected UTC clock. */
+  public record StoredObject(String key, long size, LocalDateTime lastModified) {
   }
 
   private PresignedUrlResponse generatePresignedUrl(String objectKey, long expiryMinutes, Method method) {

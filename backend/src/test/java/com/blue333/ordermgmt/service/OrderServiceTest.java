@@ -50,6 +50,9 @@ class OrderServiceTest {
   private RequirementBaselineRepository requirementBaselineRepository;
   private AttachmentRepository attachmentRepository;
   private UserRepository userRepository;
+  private DeliveryRules deliveryRules;
+  private com.blue333.ordermgmt.repository.MaterialTaskRepository materialTaskRepository;
+  private MaterialTaskService materialTaskService;
   private ApplicationEventPublisher eventPublisher;
   private OrderService service;
   private Order order;
@@ -62,11 +65,14 @@ class OrderServiceTest {
     requirementBaselineRepository = mock(RequirementBaselineRepository.class);
     attachmentRepository = mock(AttachmentRepository.class);
     userRepository = mock(UserRepository.class);
+    deliveryRules = mock(DeliveryRules.class);
+    materialTaskRepository = mock(com.blue333.ordermgmt.repository.MaterialTaskRepository.class);
+    materialTaskService = mock(MaterialTaskService.class);
     eventPublisher = mock(ApplicationEventPublisher.class);
     service = new OrderService(orderRepository, materialSpecRepository, requirementBaselineRepository,
         attachmentRepository, mock(IdGenerator.class), new OrderStateMachine(),
         mock(AttachmentFilePolicyValidator.class), new ObjectMapper(), eventPublisher, userRepository,
-        Clock.fixed(NOW, ZoneOffset.UTC));
+        deliveryRules, materialTaskRepository, materialTaskService, Clock.fixed(NOW, ZoneOffset.UTC));
 
     User am = mock(User.class);
     when(am.getId()).thenReturn(AM_ID);
@@ -148,5 +154,88 @@ class OrderServiceTest {
     when(orderRepository.findByIdForUpdate(404L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.submitOrder(404L)).isInstanceOf(ResourceNotFoundException.class);
+  }
+
+  @Test
+  void markDeliveredChecksDeliveryRulesAndCompletesTheOrder() {
+    order.changeStatus(OrderStatus.IN_PRODUCTION);
+
+    Order delivered = service.markDelivered(ORDER_ID);
+
+    assertThat(delivered.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    verify(deliveryRules).requireDeliverable(ORDER_ID);
+    verify(orderRepository).save(order);
+  }
+
+  @Test
+  void markDeliveredRejectsOrdersThatAreNotInProduction() {
+    assertThatThrownBy(() -> service.markDelivered(ORDER_ID))
+        .isInstanceOf(InvalidStateTransitionException.class).hasMessageContaining("in-production");
+    verify(deliveryRules, never()).requireDeliverable(any());
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void markDeliveredPropagatesTheStrictApprovalGate() {
+    order.changeStatus(OrderStatus.IN_PRODUCTION);
+    org.mockito.Mockito.doThrow(new InvalidStateTransitionException("tasks not approved"))
+        .when(deliveryRules).requireDeliverable(ORDER_ID);
+
+    assertThatThrownBy(() -> service.markDelivered(ORDER_ID))
+        .isInstanceOf(InvalidStateTransitionException.class).hasMessageContaining("tasks not approved");
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.IN_PRODUCTION);
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void cancellationCascadesToEveryNonTerminalTaskWithTheSanitizedReason() {
+    order.changeStatus(OrderStatus.IN_PRODUCTION);
+    com.blue333.ordermgmt.domain.MaterialTask active = task(10L,
+        com.blue333.ordermgmt.domain.enums.MaterialTaskStatus.PENDING_DESIGN);
+    com.blue333.ordermgmt.domain.MaterialTask approved = task(11L,
+        com.blue333.ordermgmt.domain.enums.MaterialTaskStatus.APPROVED);
+    com.blue333.ordermgmt.domain.MaterialTask cancelled = task(12L,
+        com.blue333.ordermgmt.domain.enums.MaterialTaskStatus.CANCELLED);
+    when(materialTaskRepository.findAllByOrderIdOrderByIdAsc(ORDER_ID))
+        .thenReturn(List.of(active, approved, cancelled));
+
+    Order result = service.cancelOrder(ORDER_ID, "  <b>Scope</b> dropped  ");
+
+    assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    verify(materialTaskService).cancelTask(10L, "Scope dropped");
+    verify(materialTaskService, never()).cancelTask(11L, "Scope dropped");
+    verify(materialTaskService, never()).cancelTask(12L, "Scope dropped");
+    verify(orderRepository).save(order);
+  }
+
+  @Test
+  void cancellationWithoutReasonFallsBackToTheCascadeNote() {
+    order.changeStatus(OrderStatus.PENDING_CONFIRM);
+    com.blue333.ordermgmt.domain.MaterialTask active = task(10L,
+        com.blue333.ordermgmt.domain.enums.MaterialTaskStatus.PENDING_REVISE);
+    when(materialTaskRepository.findAllByOrderIdOrderByIdAsc(ORDER_ID)).thenReturn(List.of(active));
+
+    service.cancelOrder(ORDER_ID, " ");
+
+    verify(materialTaskService).cancelTask(10L, "订单已取消（级联取消任务）");
+  }
+
+  @Test
+  void cancellationRejectsTerminalOrders() {
+    order.changeStatus(OrderStatus.COMPLETED);
+
+    assertThatThrownBy(() -> service.cancelOrder(ORDER_ID, "done"))
+        .isInstanceOf(InvalidStateTransitionException.class).hasMessageContaining("COMPLETED");
+    verify(materialTaskService, never()).cancelTask(any(), any());
+    verify(orderRepository, never()).save(any());
+  }
+
+  private com.blue333.ordermgmt.domain.MaterialTask task(Long id,
+      com.blue333.ordermgmt.domain.enums.MaterialTaskStatus status) {
+    com.blue333.ordermgmt.domain.MaterialTask task =
+        mock(com.blue333.ordermgmt.domain.MaterialTask.class);
+    when(task.getId()).thenReturn(id);
+    when(task.getStatus()).thenReturn(status);
+    return task;
   }
 }

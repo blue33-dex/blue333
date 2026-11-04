@@ -24,9 +24,11 @@ public class OrderStateMachine {
   private static Map<OrderStatus, Set<OrderStatus>> transitions() {
     Map<OrderStatus, Set<OrderStatus>> transitions = new EnumMap<>(OrderStatus.class);
     // Submission and rejection keep the order in PENDING_CONFIRM until task assignment is added.
+    // A-18 delivers IN_PRODUCTION → COMPLETED; COMPLETED and CANCELLED are terminal (BR-12).
     transitions.put(OrderStatus.PENDING_CONFIRM,
         Set.of(OrderStatus.PENDING_CONFIRM, OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED));
-    transitions.put(OrderStatus.IN_PRODUCTION, Set.of(OrderStatus.CANCELLED));
+    transitions.put(OrderStatus.IN_PRODUCTION,
+        Set.of(OrderStatus.COMPLETED, OrderStatus.CANCELLED));
     transitions.put(OrderStatus.COMPLETED, Set.of());
     transitions.put(OrderStatus.CANCELLED, Set.of());
     return Map.copyOf(transitions);

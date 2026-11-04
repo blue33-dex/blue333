@@ -47,6 +47,11 @@ const routes: RouteRecordRaw[] = [
         name: 'am-order-detail',
         component: () => import('../views/OrderDetail.vue'),
       },
+      {
+        path: 'orders/:orderId/client-review',
+        name: 'am-client-review',
+        component: () => import('../views/am/ClientReview.vue'),
+      },
     ],
   },
 
@@ -65,6 +70,26 @@ const routes: RouteRecordRaw[] = [
         path: 'review/:orderId',
         name: 'bo-order-review',
         component: () => import('../views/bo/OrderReview.vue'),
+      },
+      {
+        path: 'internal-review/:orderId?',
+        name: 'bo-internal-review',
+        component: () => import('../views/bo/InternalReview.vue'),
+      },
+      {
+        path: 'archive',
+        name: 'bo-order-archive',
+        component: () => import('../views/bo/OrderArchive.vue'),
+      },
+      {
+        path: 'kanban',
+        name: 'bo-kanban',
+        component: () => import('../views/bo/OrderKanban.vue'),
+      },
+      {
+        path: 'exceptions',
+        name: 'bo-exceptions',
+        component: () => import('../views/bo/ExceptionRecords.vue'),
       },
     ],
   },

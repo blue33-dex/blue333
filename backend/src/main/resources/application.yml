@@ -13,12 +13,33 @@ security:
     access-token-ttl-ms: ${JWT_ACCESS_TOKEN_TTL_MS:1800000}
     refresh-token-ttl-ms: ${JWT_REFRESH_TOKEN_TTL_MS:604800000}
 
+app:
+  # Deadlines are entered as wall-clock times without a zone; this zone interprets them (e.g. is_overdue).
+  business-time-zone: ${APP_BUSINESS_TIME_ZONE:Asia/Shanghai}
+  archive-report:
+    # Optional embedded TrueType font for CJK text in the A-19 archive PDF; Helvetica is used when empty.
+    font-path: ${ARCHIVE_REPORT_FONT_PATH:}
+  # P4-T05 daily overdue scan (default 04:00 business time).
+  exception-scan:
+    cron: "${EXCEPTION_SCAN_CRON:0 0 4 * * ?}"
+  # P4-T11 orphan object sweep: quarantine unreferenced uploads, purge after the retention window.
+  orphan-cleanup:
+    enabled: ${ORPHAN_CLEANUP_ENABLED:true}
+    cron: "${ORPHAN_CLEANUP_CRON:0 0 3 * * ?}"
+    min-age-hours: ${ORPHAN_MIN_AGE_HOURS:24}
+    quarantine-retention-days: ${ORPHAN_RETENTION_DAYS:7}
+  # P4-T09 SSE heartbeat keeps proxies from closing idle notification streams.
+  sse:
+    heartbeat-ms: ${SSE_HEARTBEAT_MS:25000}
+
 storage:
-  minio:
-    public-endpoint: ${MINIO_PUBLIC_ENDPOINT:${MINIO_ENDPOINT}}
-    access-key: ${MINIO_ACCESS_KEY}
-    secret-key: ${MINIO_SECRET_KEY}
-    bucket: ${MINIO_BUCKET:ordermgmt}
+  s3:
+    endpoint: ${S3_ENDPOINT}
+    public-endpoint: ${S3_PUBLIC_ENDPOINT:${S3_ENDPOINT}}
+    access-key: ${S3_ACCESS_KEY}
+    secret-key: ${S3_SECRET_KEY}
+    bucket: ${S3_BUCKET:ordermgmt}
+    region: ${S3_REGION:us-east-1}
 
 management:
   endpoints:
