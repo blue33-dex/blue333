@@ -119,6 +119,10 @@ function route(req: MockRequest): { status: number; body: ApiResponse } {
   if (req.method === 'POST' && req.url === '/auth/refresh') {
     return { status: 200, body: wrap({ access_token: 'mock-new-token' }) }
   }
+  // POST /auth/logout → Mock 模式无服务端会话，本地清理即可
+  if (req.method === 'POST' && req.url === '/auth/logout') {
+    return { status: 204, body: {} }
+  }
 
   // === 订单 ===
   // GET /orders/mine → AM 我的订单列表
