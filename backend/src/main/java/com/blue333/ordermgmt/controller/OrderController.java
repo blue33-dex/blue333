@@ -29,7 +29,9 @@ import com.blue333.ordermgmt.service.TimelineService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -244,7 +246,13 @@ public class OrderController {
     return ApiResponse.of(orderQueryService.detail(orderService.markDelivered(orderId)));
   }
 
-  public record MaterialSpecRequest(@NotNull @JsonProperty("material_type") com.blue333.ordermgmt.domain.enums.MaterialType materialType, @NotBlank @JsonProperty("spec_size") String specSize) {}
+  public record MaterialSpecRequest(
+      @NotNull @JsonProperty("material_type") com.blue333.ordermgmt.domain.enums.MaterialType materialType,
+      @NotBlank(message = "规格尺寸必填")
+      @Size(max = 100, message = "规格尺寸不能超过 100 个字符")
+      @Pattern(regexp = "^[\\p{L}\\p{N}\\s/xX×÷*+\\-.,，（）()]+$",
+          message = "规格尺寸只能包含字母、数字、空格及 × * / - . 等符号")
+      @JsonProperty("spec_size") String specSize) {}
   public record CreateOrderRequest(@NotBlank @JsonProperty("customer_name") String customerName, @NotBlank @JsonProperty("use_scene") String useScene, @NotNull @JsonProperty("delivery_deadline") LocalDate deliveryDeadline, @JsonProperty("remark") String remark, @NotNull @JsonProperty("material_specs") List<@Valid MaterialSpecRequest> materialSpecs) {}
   public record PresignAttachmentRequest(@NotBlank @JsonProperty("file_name") String fileName, @Positive @JsonProperty("file_size") long fileSize) {}
   public record ConfirmAttachmentRequest(@NotBlank @JsonProperty("file_name") String fileName, @Positive @JsonProperty("file_size") long fileSize, @NotBlank @JsonProperty("object_key") String objectKey) {}

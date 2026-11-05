@@ -73,6 +73,10 @@ function removeSpec(idx: number) {
   specErrors.value = next
 }
 
+/** 与后端 OrderController.MaterialSpecRequest 保持一致：1~100 字符，仅允许尺寸常用字符 */
+const MAX_SPEC_SIZE_LENGTH = 100
+const SPEC_SIZE_PATTERN = /^[\p{L}\p{N}\s\/xX×÷*+\-.,，（）()]+$/u
+
 function validate(): boolean {
   errors.value = {}
   specErrors.value = {}
@@ -96,7 +100,13 @@ function validate(): boolean {
   form.material_specs.forEach((s, i) => {
     const row: Record<string, string> = {}
     if (!s.material_type) row.material_type = '请选择物料类型'
-    if (!s.spec_size.trim()) row.spec_size = '规格尺寸必填'
+    const specSize = s.spec_size.trim()
+    if (!specSize) row.spec_size = '规格尺寸必填'
+    else if (specSize.length > MAX_SPEC_SIZE_LENGTH) {
+      row.spec_size = `规格尺寸不能超过 ${MAX_SPEC_SIZE_LENGTH} 个字符`
+    } else if (!SPEC_SIZE_PATTERN.test(specSize)) {
+      row.spec_size = '规格尺寸只能包含字母、数字、空格及 × * / - . 等符号'
+    }
     if (Object.keys(row).length) {
       specErrors.value[i] = row
       ok = false
@@ -242,7 +252,7 @@ const todayStr = computed(() => new Date().toISOString().slice(0, 10))
           </div>
           <div class="spec-cell size-cell">
             <label>规格尺寸 <em>*</em></label>
-            <input v-model="spec.spec_size" type="text" placeholder="如 600mm × 900mm" />
+            <input v-model="spec.spec_size" type="text" :maxlength="MAX_SPEC_SIZE_LENGTH" placeholder="如 600mm × 900mm" />
             <small v-if="specErrors[i]?.spec_size" class="err">{{ specErrors[i].spec_size }}</small>
           </div>
           <div class="spec-cell action-cell">
@@ -291,7 +301,7 @@ const todayStr = computed(() => new Date().toISOString().slice(0, 10))
   padding: 24px;
 }
 .section { margin-bottom: 24px; }
-.section h2 { font-size: 15px; margin: 0 0 12px; padding-left: 8px; border-left: 3px solid #409eff; }
+.section h2 { font-size: 15px; margin: 0 0 12px; padding-left: 8px; border-left: 3px solid var(--primary); }
 .section-hint { margin: -6px 0 12px; color: #999; font-size: 12px; }
 
 .field { display: block; margin-bottom: 14px; font-size: 13px; color: #333; }
@@ -370,9 +380,9 @@ const todayStr = computed(() => new Date().toISOString().slice(0, 10))
   cursor: pointer;
   font-size: 14px;
 }
-.btn.primary { background: #409eff; border-color: #409eff; color: #fff; }
-.btn.primary:hover:not(:disabled) { background: #66b1ff; border-color: #66b1ff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
 .btn.ghost { background: #fff; color: #606266; }
-.btn.ghost:hover:not(:disabled) { color: #409eff; border-color: #c6e2ff; background: #ecf5ff; }
+.btn.ghost:hover:not(:disabled) { color: var(--primary); border-color: var(--primary-border); background: var(--primary-soft); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>
