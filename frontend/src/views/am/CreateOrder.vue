@@ -181,8 +181,11 @@ const todayStr = computed(() => new Date().toISOString().slice(0, 10))
 <template>
   <div class="page">
     <header class="page-header">
-      <h1>创建订单</h1>
-      <p class="desc">登记客户需求 → 提交后自动进入 BO 审阅队列</p>
+      <div>
+        <h1>创建订单</h1>
+        <p class="desc">登记客户需求 → 提交后自动进入 BO 审阅队列</p>
+      </div>
+      <button type="button" class="btn ghost" @click="router.push('/am/orders')">← 返回首页</button>
     </header>
 
     <form class="card" @submit.prevent="handleSubmit" novalidate>
@@ -277,6 +280,7 @@ const todayStr = computed(() => new Date().toISOString().slice(0, 10))
 
 <style scoped>
 .page { padding: 24px; max-width: 960px; margin: 0 auto; }
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .page-header h1 { margin: 0 0 4px; font-size: 20px; }
 .page-header .desc { margin: 0 0 16px; color: #666; font-size: 13px; }
 

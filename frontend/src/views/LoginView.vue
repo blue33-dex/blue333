@@ -95,7 +95,7 @@ async function handleLogin() {
 
 function defaultRedirect(role: RoleType | undefined) {
   return role === RoleType.AM
-    ? '/am/orders/create'
+    ? '/am/orders'
     : role === RoleType.BO
     ? '/bo/review'
     : '/ds/tasks'

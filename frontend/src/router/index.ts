@@ -35,7 +35,7 @@ const routes: RouteRecordRaw[] = [
   // AM 路由
   {
     path: '/am',
-    redirect: '/am/orders/create',
+    redirect: '/am/orders',
     meta: { requiresAuth: true, roles: [RoleType.AM] },
     children: [
       {
@@ -147,7 +147,7 @@ router.beforeEach((to) => {
   if ((to.path === '/login' || to.path === '/register') && hasValidSession) {
     switch (authStore.primaryRole) {
       case RoleType.AM:
-        return '/am/orders/create'
+        return '/am/orders'
       case RoleType.BO:
         return '/bo/review'
       case RoleType.DS:
