@@ -4,6 +4,7 @@
  */
 import http from '../http'
 import type { ApiResponse } from '../http'
+import { USE_MOCK } from '../http'
 import type { ExceptionStatus, ExceptionType, OrderStatus } from '../../types/enums'
 
 export interface KanbanCard {
@@ -157,6 +158,8 @@ export function subscribeNotifications(
   onEvent: (event: string, payload: unknown) => void,
   onError?: (message: string) => void
 ): () => void {
+  // Mock 模式下无真实 SSE 端点；fetch 绕过 axios 适配器会打到不存在的后端，直接返回 no-op
+  if (USE_MOCK) return () => {}
   const controller = new AbortController()
   const token = localStorage.getItem('access_token')
 

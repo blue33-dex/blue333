@@ -46,23 +46,44 @@ export interface MockMaterialTask {
   updated_at: string
 }
 
+export interface MockUser {
+  id: number
+  username: string
+  password: string
+  name: string
+  role: RoleType
+}
+
 // ========== 持久化工具 ===========
 interface MockStorage {
   orders: MockOrder[]
   tasks: MockMaterialTask[]
+  users: MockUser[]
   nextOrderId: number
   nextTaskId: number
+  nextUserId: number
 }
 
 function save(): void {
-  const payload: MockStorage = { orders, tasks, nextOrderId, nextTaskId }
+  const payload: MockStorage = { orders, tasks, users, nextOrderId, nextTaskId, nextUserId }
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)) } catch { /* 忽略 */ }
+}
+
+/** 演示账号（种子用户）：id 与角色对齐 AM=1 / BO=2 / DS=3（DS id 需与种子任务 assignee_id 一致）*/
+function seedUsers(): MockUser[] {
+  return [
+    { id: 1, username: 'am_demo', password: 'demo123', name: '张晓明', role: RoleType.AM },
+    { id: 2, username: 'bo_demo', password: 'demo123', name: '王审核', role: RoleType.BO },
+    { id: 3, username: 'ds_demo', password: 'demo123', name: '李设计', role: RoleType.DS },
+  ]
 }
 
 function loadSeed(): MockStorage {
   return {
     nextOrderId: 2,
     nextTaskId: 101,
+    nextUserId: 4,
+    users: seedUsers(),
     orders: [
       {
         id: 1,
@@ -107,8 +128,10 @@ function loadSeed(): MockStorage {
 // ========== Mock 数据库（从 localStorage 恢复，否则用种子数据）==========
 let orders: MockOrder[]
 let tasks: MockMaterialTask[]
+let users: MockUser[]
 let nextOrderId: number
 let nextTaskId: number
+let nextUserId: number
 
 try {
   const raw = localStorage.getItem(STORAGE_KEY)
@@ -116,25 +139,33 @@ try {
     const parsed = JSON.parse(raw) as MockStorage
     orders = parsed.orders || []
     tasks = parsed.tasks || []
+    // 老版本数据没有 users 字段：回退到种子用户，保证演示账号仍可登录
+    users = Array.isArray(parsed.users) && parsed.users.length ? parsed.users : seedUsers()
     // ID 计数器兜底：不仅处理"字段缺失"，也处理"计数器小于已有最大 ID"（数据被手工改写 / 旧版本残留）
     const maxOrderId = orders.reduce((m, o) => Math.max(m, Number(o.id) || 0), 0)
     const maxTaskId = tasks.reduce((m, t) => Math.max(m, Number(t.id) || 0), 0)
+    const maxUserId = users.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0)
     nextOrderId = Math.max(Number(parsed.nextOrderId) || 0, maxOrderId + 1, 2)
     nextTaskId = Math.max(Number(parsed.nextTaskId) || 0, maxTaskId + 1, 101)
+    nextUserId = Math.max(Number(parsed.nextUserId) || 0, maxUserId + 1, 4)
   } else {
     const seed = loadSeed()
     orders = seed.orders
     tasks = seed.tasks
+    users = seed.users
     nextOrderId = seed.nextOrderId
     nextTaskId = seed.nextTaskId
+    nextUserId = seed.nextUserId
     save()
   }
 } catch {
   const seed = loadSeed()
   orders = seed.orders
   tasks = seed.tasks
+  users = seed.users
   nextOrderId = seed.nextOrderId
   nextTaskId = seed.nextTaskId
+  nextUserId = seed.nextUserId
 }
 
 // ========== 当前登录用户（Mock 层数据可见性 BR-13 依据）==========
@@ -179,22 +210,47 @@ export const mockService = {
     save()
   },
 
-  mockLogin(data: { username: string; password: string }) {
-    // id 与角色对齐：AM=1 / BO=2 / DS=3（DS id 需与种子任务 assignee_id 一致，BR-13 过滤才有意义）
-    const roleMap: Record<string, { id: number; role: string; name: string }> = {
-      am_demo: { id: 1, role: RoleType.AM, name: '张晓明' },
-      bo_demo: { id: 2, role: RoleType.BO, name: '王审核' },
-      ds_demo: { id: 3, role: RoleType.DS, name: '李设计' },
-    }
-    const u = roleMap[data.username]
-    if (!u || data.password !== 'demo123') {
+  mockLogin(data: { username: string; password: string; role?: RoleType }) {
+    const u = users.find((x) => x.username === data.username)
+    if (!u || u.password !== data.password) {
       return { error: 'INVALID_CREDENTIALS', message: '用户名或密码错误' }
+    }
+    // 三端分离：登录前已选择身份端，账号角色必须与所选身份一致
+    if (data.role && u.role !== data.role) {
+      return { error: 'ROLE_MISMATCH', message: '所选身份与账号角色不符，请切换身份端后重试' }
     }
     return {
       access_token: `mock-jwt-${u.role}-${Date.now()}`,
       refresh_token: `mock-refresh-${u.role}`,
-      user: { id: u.id, username: data.username, name: u.name, roles: [u.role as RoleType] },
+      user: { id: u.id, username: u.username, name: u.name, roles: [u.role] },
     }
+  },
+
+  /** 注册（Mock）：用户名唯一；角色由所选身份端决定；持久化到 localStorage */
+  mockRegister(data: { username?: string; password?: string; name?: string; role?: RoleType }) {
+    const username = (data.username || '').trim()
+    const name = (data.name || '').trim()
+    const password = data.password || ''
+    const role = data.role
+    if (!username || !name || !password || !role) {
+      return { error: 'VALIDATION_ERROR', message: '姓名、用户名、密码与身份端均为必填' }
+    }
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+      return { error: 'VALIDATION_ERROR', message: '用户名需为 3~20 位字母、数字或下划线' }
+    }
+    if (password.length < 4) {
+      return { error: 'VALIDATION_ERROR', message: '密码至少 4 位' }
+    }
+    if (!Object.values(RoleType).includes(role)) {
+      return { error: 'VALIDATION_ERROR', message: '请选择身份端' }
+    }
+    if (users.some((x) => x.username === username)) {
+      return { error: 'USERNAME_EXISTS', message: '用户名已被注册' }
+    }
+    const user: MockUser = { id: nextUserId++, username, password, name, role }
+    users.push(user)
+    save()
+    return { user: { id: user.id, username: user.username, name: user.name, roles: [user.role] } }
   },
 
   /** A-24 AM 我的订单（BR-13：AM 仅返回自己创建的订单；BO 需要全量队列）*/
@@ -236,6 +292,8 @@ export const mockService = {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     // 用 nextOrderId 本身作为序号来源，避免依赖 orders.length（数组删改会导致序号冲突）
     const seq = String(id).padStart(3, '0')
+    const creator = resolveCurrentUser()
+    const creatorName = users.find((x) => x.id === creator?.id)?.name || '张晓明'
     const order: MockOrder = {
       id,
       order_no: `ORD-${today}-${seq}`,
@@ -244,8 +302,8 @@ export const mockService = {
       delivery_deadline: data.delivery_deadline || '2026-12-31',
       status: OrderStatus.PENDING_CONFIRM,
       remark: data.remark || '',
-      am_id: 1,
-      am_name: '张晓明',
+      am_id: creator?.id ?? 1,
+      am_name: creatorName,
       material_specs: (data.material_specs || []).map((s, i) => ({
         id: 100 + i, order_id: id,
         material_type: (s.material_type as MaterialType) || MaterialType.POSTER,

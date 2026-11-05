@@ -11,7 +11,7 @@
  */
 import { mockService } from './mock-data'
 import type { ApiResponse } from './http'
-import type { Priority } from '../types/enums'
+import type { Priority, RoleType } from '../types/enums'
 
 interface MockRequest {
   url: string
@@ -97,13 +97,24 @@ export async function mockAdapter(config: {
 function route(req: MockRequest): { status: number; body: ApiResponse } {
   // === 认证（Mock 直接放行，由前端 LoginView 做真实角色判定）===
   if (req.method === 'POST' && req.url === '/auth/login') {
-    const loginData = (req.data ?? {}) as { username: string; password: string }
-    const result = mockService.mockLogin(loginData)
+    const loginData = (req.data ?? {}) as { username: string; password: string; role?: string }
+    const result = mockService.mockLogin(loginData as { username: string; password: string; role?: RoleType })
     // mockLogin 成功时返回 { access_token, refresh_token, user }；失败返回 { error, message }
     if ('error' in result) {
+      // 401 统一表示认证失败（密码错误 / 身份端不匹配）
       return { status: 401, body: { code: result.error, message: result.message } }
     }
     return { status: 200, body: wrap(result) }
+  }
+  // POST /auth/register → 按所选身份端注册新账号（Mock 持久化到 localStorage）
+  if (req.method === 'POST' && req.url === '/auth/register') {
+    const regData = (req.data ?? {}) as { username?: string; password?: string; name?: string; role?: RoleType }
+    const result = mockService.mockRegister(regData)
+    if ('error' in result) {
+      const status = result.error === 'USERNAME_EXISTS' ? 409 : 422
+      return { status, body: { code: result.error, message: result.message } }
+    }
+    return { status: 201, body: wrap(result) }
   }
   if (req.method === 'POST' && req.url === '/auth/refresh') {
     return { status: 200, body: wrap({ access_token: 'mock-new-token' }) }

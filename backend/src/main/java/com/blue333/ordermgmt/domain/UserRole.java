@@ -34,6 +34,13 @@ public class UserRole {
   protected UserRole() {
   }
 
+  /** 绑定已持久化的用户与角色。 */
+  public UserRole(User user, Role role) {
+    this.id = new UserRoleId(user.getId(), role.getId());
+    this.user = user;
+    this.role = role;
+  }
+
   public UserRoleId getId() { return id; }
   public User getUser() { return user; }
   public Role getRole() { return role; }

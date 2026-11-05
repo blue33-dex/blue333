@@ -20,6 +20,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
+    path: '/register',
+    name: 'register',
+    component: () => import('../views/RegisterView.vue'),
+    meta: { requiresAuth: false },
+  },
+  {
     path: '/403',
     name: 'forbidden',
     component: () => import('../views/ForbiddenView.vue'),
@@ -137,8 +143,8 @@ router.beforeEach((to) => {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
 
-  // 已登录但访问登录页 → 按角色跳转首页
-  if (to.path === '/login' && hasValidSession) {
+  // 已登录但访问登录/注册页 → 按角色跳转首页
+  if ((to.path === '/login' || to.path === '/register') && hasValidSession) {
     switch (authStore.primaryRole) {
       case RoleType.AM:
         return '/am/orders/create'

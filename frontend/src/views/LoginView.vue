@@ -14,15 +14,28 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-const username = ref('')
+const username = ref((route.query.username as string) || '')
 const password = ref('')
+const role = ref<RoleType | ''>((route.query.role as RoleType) || '')
 const loading = ref(false)
 const error = ref('')
-const fieldErrors = ref<{ username?: string; password?: string }>({})
+const registered = ref(route.query.registered === '1')
+const fieldErrors = ref<{ username?: string; password?: string; role?: string }>({})
+
+/** 三端身份选项（登录前先选择身份端）*/
+const roleOptions: { value: RoleType; label: string; desc: string }[] = [
+  { value: RoleType.AM, label: '客户经理端', desc: '登记订单' },
+  { value: RoleType.BO, label: '业务负责人端', desc: '审阅 / 派发' },
+  { value: RoleType.DS, label: '设计师端', desc: '接收任务' },
+]
 
 function validateForm(): boolean {
   fieldErrors.value = {}
   let ok = true
+  if (!role.value) {
+    fieldErrors.value.role = '请先选择身份端'
+    ok = false
+  }
   if (!username.value.trim()) {
     fieldErrors.value.username = '请输入用户名'
     ok = false
@@ -39,6 +52,7 @@ function validateForm(): boolean {
 
 async function handleLogin() {
   error.value = ''
+  registered.value = false
   if (!validateForm()) return
 
   loading.value = true
@@ -47,6 +61,7 @@ async function handleLogin() {
     const res = await http.post('/auth/login', {
       username: username.value.trim(),
       password: password.value,
+      role: role.value,
     })
     const body = res.data as {
       code?: string
@@ -69,8 +84,7 @@ async function handleLogin() {
     // mock-adapter 返回 401，或真实后端返回 401/403
     const anyErr = e as { response?: { status?: number; data?: { message?: string } }; message?: string }
     if (anyErr.response?.status === 401) {
-      const msg = anyErr.response.data?.message || '用户名或密码错误'
-      error.value = msg + '。演示账号：am_demo / bo_demo / ds_demo（密码均为 demo123）。'
+      error.value = anyErr.response.data?.message || '用户名或密码错误'
     } else {
       error.value = anyErr.message || '登录请求失败，请稍后重试'
     }
@@ -92,8 +106,22 @@ function defaultRedirect(role: RoleType | undefined) {
   <div class="login-wrapper">
     <div class="login-card">
       <h1>宣传物料订单管控系统</h1>
-      <p class="subtitle">登录</p>
+      <p class="subtitle">请选择身份端后登录</p>
       <form @submit.prevent="handleLogin" novalidate>
+        <div class="role-picker" :class="{ 'has-error': fieldErrors.role }">
+          <button
+            v-for="opt in roleOptions"
+            :key="opt.value"
+            type="button"
+            class="role-card"
+            :class="{ active: role === opt.value }"
+            @click="role = opt.value"
+          >
+            <span class="role-label">{{ opt.label }}</span>
+            <span class="role-desc">{{ opt.desc }}</span>
+          </button>
+        </div>
+        <em v-if="fieldErrors.role" class="inline-error">{{ fieldErrors.role }}</em>
         <label class="field">
           <span>用户名</span>
           <input
@@ -116,17 +144,19 @@ function defaultRedirect(role: RoleType | undefined) {
           />
           <em v-if="fieldErrors.password" class="inline-error">{{ fieldErrors.password }}</em>
         </label>
+        <p v-if="registered" class="ok">注册成功，请使用新账号登录。</p>
         <p v-if="error" class="error">{{ error }}</p>
         <button type="submit" :disabled="loading">
           {{ loading ? '登录中…' : '登录' }}
         </button>
       </form>
+      <p class="register-link">还没有账号？<router-link to="/register">注册新账号</router-link></p>
       <div class="hint">
-        <p>Phase 1 演示账号（密码均为 demo123）：</p>
+        <p>演示账号（密码均为 demo123，需选择对应身份端）：</p>
         <ul>
-          <li><code>am_demo</code>（AM · 登记订单）</li>
-          <li><code>bo_demo</code>（BO · 审阅/退回/派发）</li>
-          <li><code>ds_demo</code>（DS · 查看任务）</li>
+          <li>客户经理端 <code>am_demo</code></li>
+          <li>业务负责人端 <code>bo_demo</code></li>
+          <li>设计师端 <code>ds_demo</code></li>
         </ul>
       </div>
     </div>
@@ -149,7 +179,25 @@ function defaultRedirect(role: RoleType | undefined) {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 .login-card h1 { font-size: 18px; margin-bottom: 4px; }
-.subtitle { color: #666; margin-bottom: 24px; }
+.subtitle { color: #666; margin-bottom: 18px; }
+.role-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 4px; }
+.role-card {
+  padding: 10px 4px;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  color: #333;
+}
+.role-card .role-desc { font-size: 11px; color: #999; }
+.role-card.active { border-color: #409eff; background: #ecf5ff; color: #409eff; }
+.role-card.active .role-desc { color: #409eff; }
+.role-picker.has-error .role-card { border-color: #f56c6c; }
 .field { display: block; margin-bottom: 16px; font-size: 13px; color: #333; }
 .field span { display: block; margin-bottom: 6px; }
 input {
@@ -174,6 +222,9 @@ button {
 }
 button:disabled { background: #a0cfff; cursor: not-allowed; }
 .error { color: #f56c6c; font-size: 13px; margin: 0 0 12px; padding: 6px 10px; background: #fef0f0; border-radius: 4px; }
+.ok { color: #67c23a; font-size: 13px; margin: 0 0 12px; padding: 6px 10px; background: #f0f9eb; border-radius: 4px; }
+.register-link { font-size: 13px; color: #606266; text-align: center; margin: 14px 0 0; }
+.register-link a { color: #409eff; text-decoration: none; }
 .hint { color: #999; font-size: 12px; margin-top: 18px; }
 .hint ul { margin: 6px 0 0 18px; padding: 0; }
 .hint li { margin: 2px 0; }

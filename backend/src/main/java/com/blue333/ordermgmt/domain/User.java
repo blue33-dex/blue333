@@ -49,6 +49,17 @@ public class User {
   protected User() {
   }
 
+  /** 新建启用状态的账号；密码由调用方先行加密。 */
+  public static User create(String username, String passwordHash, String name) {
+    User user = new User();
+    user.username = username;
+    user.passwordHash = passwordHash;
+    user.name = name;
+    user.enabled = true;
+    user.tokenVersion = 0L;
+    return user;
+  }
+
   public Long getId() { return id; }
   public String getUsername() { return username; }
   public String getPasswordHash() { return passwordHash; }

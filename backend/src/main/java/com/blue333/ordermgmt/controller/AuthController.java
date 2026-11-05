@@ -2,10 +2,13 @@ package com.blue333.ordermgmt.controller;
 
 import com.blue333.ordermgmt.dto.ApiResponse;
 import com.blue333.ordermgmt.dto.auth.AuthResponse;
+import com.blue333.ordermgmt.dto.auth.AuthenticatedUserResponse;
 import com.blue333.ordermgmt.dto.auth.LoginRequest;
 import com.blue333.ordermgmt.dto.auth.RefreshTokenRequest;
+import com.blue333.ordermgmt.dto.auth.RegisterRequest;
 import com.blue333.ordermgmt.service.AuthService;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,6 +31,15 @@ public class AuthController {
       return ResponseEntity.badRequest().build();
     }
     return ResponseEntity.ok(ApiResponse.of(authService.login(request.username(), request.password())));
+  }
+
+  @PostMapping("/register")
+  public ResponseEntity<ApiResponse<AuthenticatedUserResponse>> register(
+      @RequestBody(required = false) RegisterRequest request) {
+    if (request == null) {
+      return ResponseEntity.badRequest().build();
+    }
+    return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(authService.register(request)));
   }
 
   @PostMapping("/refresh")

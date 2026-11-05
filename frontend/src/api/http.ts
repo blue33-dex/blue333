@@ -52,7 +52,7 @@ if (USE_MOCK) {
 http.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // 白名单：认证接口不需要 token
-    const noAuthPaths = ['/auth/login', '/auth/refresh']
+    const noAuthPaths = ['/auth/login', '/auth/register', '/auth/refresh']
     const needsAuth = !noAuthPaths.some((p) => config.url?.startsWith(p))
     if (needsAuth) {
       const token = localStorage.getItem('access_token')
@@ -83,7 +83,7 @@ http.interceptors.response.use(
 
     // 关键：认证端点（login / refresh）返回 401 是正常的业务错误（密码错 / token 失效），
     // 不应触发全局 refresh → 重定向逻辑，否则登录页输入错误密码会被强制跳 /login
-    const noAuthPaths = ['/auth/login', '/auth/refresh']
+    const noAuthPaths = ['/auth/login', '/auth/register', '/auth/refresh']
     const isAuthRequest = noAuthPaths.some((p) => axiosErr.config?.url?.startsWith(p))
 
     if (axiosErr.response?.status === 401 && !isAuthRequest) {

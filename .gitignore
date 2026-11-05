@@ -92,3 +92,6 @@ ordermgmt-minio-data/
 *.swp
 *~
 .DS_Store
+
+# ------- 本地工具（Maven 等，不入库）-------
+.tools/
