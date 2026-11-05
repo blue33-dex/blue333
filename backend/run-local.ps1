@@ -3,12 +3,12 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 
-# 从 infra\.env 读取演示配置（跳过注释与空行）
+# 从 infra\.env 读取演示配置（跳过注释与空行；键名允许包含数字，如 S3_ACCESS_KEY）
 Get-Content (Join-Path $root 'infra\.env') |
-  Where-Object { $_ -match '^[A-Z_]+=' } |
+  Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' } |
   ForEach-Object {
     $key, $value = $_ -split '=', 2
-    Set-Item -Path "env:$key" -Value $value
+    Set-Item -Path "env:$key" -Value $value.Trim()
   }
 
 # 本机运行时覆盖容器内的服务名
