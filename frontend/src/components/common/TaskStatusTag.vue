@@ -17,7 +17,7 @@ const labelMap: Record<string, string> = {
 
 const colorMap: Record<string, string> = {
   [MaterialTaskStatus.PENDING_DESIGN]: '#909399',
-  [MaterialTaskStatus.PENDING_APPROVAL]: '#409eff',
+  [MaterialTaskStatus.PENDING_APPROVAL]: 'var(--primary)',
   [MaterialTaskStatus.PENDING_REVISE]: '#e6a23c',
   [MaterialTaskStatus.APPROVED]: '#67c23a',
   [MaterialTaskStatus.CANCELLED]: '#909399',

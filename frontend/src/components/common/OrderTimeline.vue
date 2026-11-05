@@ -102,21 +102,21 @@ onMounted(() => load(true))
 <style scoped>
 .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); padding: 20px 24px; margin-bottom: 16px; }
 .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.card h2 { margin: 0; font-size: 15px; padding-left: 8px; border-left: 3px solid #409eff; }
+.card h2 { margin: 0; font-size: 15px; padding-left: 8px; border-left: 3px solid var(--primary); }
 .actions { display: flex; gap: 8px; }
 .more { margin-bottom: 12px; }
 .timeline { margin: 0; padding: 0 0 0 6px; list-style: none; position: relative; }
 .node { position: relative; padding: 0 0 16px 18px; border-left: 2px solid #ebeef5; }
 .node:last-child { border-left-color: transparent; padding-bottom: 0; }
-.dot { position: absolute; left: -6px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: #409eff; }
+.dot { position: absolute; left: -6px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); }
 .body .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .body strong { font-size: 14px; color: #303133; font-weight: 500; }
 .meta { margin-top: 4px; }
-.tag { font-size: 11px; color: #409eff; background: #ecf5ff; border-radius: 3px; padding: 1px 6px; }
+.tag { font-size: 11px; color: var(--primary); background: var(--primary-soft); border-radius: 3px; padding: 1px 6px; }
 .state { font-size: 12px; color: #606266; background: #f4f4f5; border-radius: 3px; padding: 1px 6px; font-family: Menlo, Consolas, monospace; }
 .remark { margin: 6px 0 0; font-size: 13px; color: #606266; white-space: pre-wrap; }
 .btn { padding: 6px 12px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 13px; }
-.btn:hover:not(:disabled) { color: #409eff; border-color: #c6e2ff; background: #ecf5ff; }
+.btn:hover:not(:disabled) { color: var(--primary); border-color: var(--primary-border); background: var(--primary-soft); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .muted { color: #999; font-size: 13px; }
 .tiny { font-size: 12px; }

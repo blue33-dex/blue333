@@ -133,8 +133,8 @@ onMounted(loadOrders)
 .btn {
   padding: 9px 18px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 14px;
 }
-.btn.primary { background: #409eff; border-color: #409eff; color: #fff; }
-.btn.primary:hover { background: #66b1ff; border-color: #66b1ff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
 
 .card {
   background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
@@ -155,7 +155,7 @@ onMounted(loadOrders)
   transition: background 0.15s;
 }
 .list-table tbody tr.clickable-row:hover { background: #f5f7fa; }
-.mono { font-family: Menlo, Consolas, monospace; color: #409eff; }
+.mono { font-family: Menlo, Consolas, monospace; color: var(--primary); }
 .rejected-flag {
   display: inline-block; margin-left: 6px; padding: 1px 6px;
   font-size: 12px; color: #f56c6c; background: #fef0f0;
@@ -174,7 +174,7 @@ onMounted(loadOrders)
 }
 .ops { white-space: nowrap; }
 .link {
-  border: none; background: none; color: #409eff; cursor: pointer;
+  border: none; background: none; color: var(--primary); cursor: pointer;
   padding: 0; font-size: 13px; text-decoration: underline;
 }
 .muted { color: #999; }

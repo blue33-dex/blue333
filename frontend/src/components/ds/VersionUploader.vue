@@ -154,12 +154,12 @@ async function submit() {
 .required { color: #f56c6c; }
 .hint { margin: 6px 0 0; font-size: 12px; color: #909399; }
 .progress { position: relative; height: 18px; background: #eef2f7; border-radius: 4px; overflow: hidden; margin: 8px 0; }
-.progress-bar { height: 100%; background: #409eff; transition: width 0.2s ease; }
+.progress-bar { height: 100%; background: var(--primary); transition: width 0.2s ease; }
 .progress-text { position: absolute; inset: 0; font-size: 11px; color: #303133; text-align: center; line-height: 18px; }
 .err { color: #f56c6c; background: #fef0f0; border-radius: 4px; padding: 6px 10px; font-size: 13px; margin: 8px 0 0; }
 .ok { color: #67c23a; background: #f0f9eb; border-radius: 4px; padding: 6px 10px; font-size: 13px; margin: 8px 0 0; }
 .actions { margin-top: 8px; }
 .btn { padding: 8px 16px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 14px; }
-.btn.primary { background: #409eff; border-color: #409eff; color: #fff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

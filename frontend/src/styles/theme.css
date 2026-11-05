@@ -1,0 +1,97 @@
+/* ============================================================
+ * 全局主题 · 三端统一设计变量
+ * 客户经理端（AM）暖橙、业务负责人端（BO）沉稳蓝、设计师端（DS）创意紫。
+ * 页面样式统一引用变量，切换端时自动换色。
+ * ============================================================ */
+:root {
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-soft: #eff6ff;
+  --primary-border: #bfdbfe;
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --text: #303133;
+  --text-muted: #909399;
+  --border: #ebeef5;
+  --radius: 10px;
+  --shadow: 0 2px 12px rgba(17, 24, 39, 0.06);
+}
+
+/* 客户经理端：暖橙，偏向客户与营销 */
+.theme-am {
+  --primary: #e6752a;
+  --primary-hover: #f08a4b;
+  --primary-soft: #fdf3e9;
+  --primary-border: #f6d9bd;
+  --bg: #fdf8f2;
+  --shadow: 0 2px 12px rgba(230, 117, 42, 0.08);
+}
+
+/* 业务负责人端：沉稳蓝，偏向审阅与管控 */
+.theme-bo {
+  --primary: #2f6fd0;
+  --primary-hover: #4a86e8;
+  --primary-soft: #eef4fd;
+  --primary-border: #c9dcf7;
+  --bg: #f4f7fc;
+  --shadow: 0 2px 12px rgba(47, 111, 208, 0.08);
+}
+
+/* 设计师端：创意紫，偏向创作与交付 */
+.theme-ds {
+  --primary: #7c5cd6;
+  --primary-hover: #9278e3;
+  --primary-soft: #f3effd;
+  --primary-border: #ddd2f7;
+  --bg: #f8f5fd;
+  --shadow: 0 2px 12px rgba(124, 92, 214, 0.08);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #f5f7fa;
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: var(--primary);
+}
+
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+}
+
+::selection {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+/* 统一滚动条，避免各页面观感差异 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4d7de;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-border);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

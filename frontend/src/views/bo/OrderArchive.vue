@@ -174,7 +174,7 @@ onMounted(load)
   text-align: left; padding: 12px 10px; border-bottom: 1px solid #ebeef5;
 }
 .list-table thead th { font-weight: 500; color: #606266; background: #fafbfc; font-size: 13px; }
-.mono { font-family: Menlo, Consolas, monospace; color: #409eff; }
+.mono { font-family: Menlo, Consolas, monospace; color: var(--primary); }
 .ops { white-space: nowrap; }
 
 .archived-flag {
@@ -188,10 +188,10 @@ onMounted(load)
 
 .btn { padding: 8px 16px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 14px; }
 .btn.small { padding: 5px 12px; font-size: 13px; }
-.btn.primary { background: #409eff; border-color: #409eff; color: #fff; }
-.btn.primary:hover:not(:disabled) { background: #66b1ff; border-color: #66b1ff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
 .btn.ghost { background: #fff; color: #606266; }
-.btn.ghost:hover:not(:disabled) { color: #409eff; border-color: #c6e2ff; background: #ecf5ff; }
+.btn.ghost:hover:not(:disabled) { color: var(--primary); border-color: var(--primary-border); background: var(--primary-soft); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .err { color: #f56c6c; background: #fef0f0; border-radius: 4px; padding: 8px 10px; font-size: 13px; }

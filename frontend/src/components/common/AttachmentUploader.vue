@@ -218,11 +218,11 @@ defineExpose({ uploadAll, pendingCount })
   position: relative;
   display: inline-block;
   padding: 7px 14px;
-  border: 1px dashed #409eff;
+  border: 1px dashed var(--primary);
   border-radius: 4px;
-  color: #409eff;
+  color: var(--primary);
   cursor: pointer;
-  background: #ecf5ff;
+  background: var(--primary-soft);
   font-size: 13px;
 }
 .pick-btn.disabled { opacity: 0.6; cursor: not-allowed; }
@@ -242,15 +242,15 @@ defineExpose({ uploadAll, pendingCount })
 .size { color: #909399; font-size: 12px; flex-shrink: 0; }
 .state { font-size: 12px; flex-shrink: 0; }
 .state.staged { color: #e6a23c; }
-.state.uploading { color: #409eff; }
+.state.uploading { color: var(--primary); }
 .state.done { color: #67c23a; }
 .state.failed { color: #f56c6c; }
 .link {
-  background: none; border: none; padding: 0 4px; color: #409eff; cursor: pointer; font-size: 12px;
+  background: none; border: none; padding: 0 4px; color: var(--primary); cursor: pointer; font-size: 12px;
 }
 .link:disabled { color: #c0c4cc; cursor: not-allowed; }
 .muted-link { color: #909399; }
 .bar { height: 4px; border-radius: 2px; background: #ebeef5; margin-top: 6px; overflow: hidden; }
-.bar span { display: block; height: 100%; background: #409eff; transition: width 0.2s; }
+.bar span { display: block; height: 100%; background: var(--primary); transition: width 0.2s; }
 .err { color: #f56c6c; font-size: 12px; margin: 6px 0 0; }
 </style>

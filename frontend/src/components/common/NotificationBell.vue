@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
   border: 1px solid #dcdfe6; background: #fff; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
-.bell:hover, .bell.open { border-color: #409eff; background: #ecf5ff; }
+.bell:hover, .bell.open { border-color: var(--primary); background: var(--primary-soft); }
 .icon { font-size: 16px; }
 .badge {
   position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; line-height: 16px;
@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
   padding: 12px 14px; border-bottom: 1px solid #ebeef5; font-size: 14px;
 }
 .head-actions { display: flex; gap: 10px; }
-.link { border: none; background: none; color: #409eff; cursor: pointer; font-size: 13px; padding: 0; }
+.link { border: none; background: none; color: var(--primary); cursor: pointer; font-size: 13px; padding: 0; }
 .link:disabled { color: #c0c4cc; cursor: not-allowed; }
 .list { margin: 0; padding: 0; list-style: none; overflow-y: auto; }
 .item { padding: 12px 14px; border-bottom: 1px solid #f2f3f5; cursor: pointer; }
@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
 .time { font-size: 12px; color: #909399; flex-shrink: 0; }
 .content { margin: 6px 0; font-size: 12px; color: #606266; }
 .meta { justify-content: flex-start; gap: 8px; }
-.tag { font-size: 11px; color: #409eff; background: #ecf5ff; border-radius: 3px; padding: 1px 6px; }
+.tag { font-size: 11px; color: var(--primary); background: var(--primary-soft); border-radius: 3px; padding: 1px 6px; }
 .new-tag { margin-left: auto; font-size: 11px; color: #f56c6c; }
 .tiny { font-size: 11px; }
 .muted { color: #999; font-size: 13px; padding: 12px 14px; }

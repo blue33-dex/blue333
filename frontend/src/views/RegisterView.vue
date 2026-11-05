@@ -163,8 +163,8 @@ async function handleRegister() {
   color: #333;
 }
 .role-card .role-desc { font-size: 11px; color: #999; }
-.role-card.active { border-color: #409eff; background: #ecf5ff; color: #409eff; }
-.role-card.active .role-desc { color: #409eff; }
+.role-card.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.role-card.active .role-desc { color: var(--primary); }
 .role-picker.has-error .role-card { border-color: #f56c6c; }
 .field { display: block; margin-bottom: 16px; font-size: 13px; color: #333; }
 .field span { display: block; margin-bottom: 6px; }
@@ -181,15 +181,15 @@ input.has-error { border-color: #f56c6c; }
 button[type='submit'] {
   width: 100%;
   padding: 10px;
-  background: #409eff;
+  background: var(--primary);
   color: #fff;
   border: none;
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
 }
-button[type='submit']:disabled { background: #a0cfff; cursor: not-allowed; }
+button[type='submit']:disabled { background: var(--primary-border); cursor: not-allowed; }
 .error { color: #f56c6c; font-size: 13px; margin: 0 0 12px; padding: 6px 10px; background: #fef0f0; border-radius: 4px; }
 .register-link { font-size: 13px; color: #606266; text-align: center; margin: 14px 0 0; }
-.register-link a { color: #409eff; text-decoration: none; }
+.register-link a { color: var(--primary); text-decoration: none; }
 </style>

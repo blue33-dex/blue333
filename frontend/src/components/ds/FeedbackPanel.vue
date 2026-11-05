@@ -189,18 +189,18 @@ watch(versionKey, load, { immediate: true })
 }
 .version-block { margin-bottom: 12px; }
 .version-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
-.version-no { font-family: Menlo, Consolas, monospace; font-size: 13px; color: #409eff; }
+.version-no { font-family: Menlo, Consolas, monospace; font-size: 13px; color: var(--primary); }
 .feedback-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .feedback-table th, .feedback-table td {
   text-align: left; padding: 8px 10px; border-bottom: 1px solid #ebeef5; vertical-align: top;
 }
 .feedback-table th { color: #909399; font-weight: 500; background: #fafafa; }
 .content { max-width: 300px; word-break: break-word; color: #303133; }
-.mono { font-family: Menlo, Consolas, monospace; color: #409eff; }
+.mono { font-family: Menlo, Consolas, monospace; color: var(--primary); }
 .ops { white-space: nowrap; }
 .btn { padding: 8px 16px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 14px; }
 .btn.small { padding: 5px 10px; font-size: 12px; }
-.btn.primary { background: #409eff; border-color: #409eff; color: #fff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .err { color: #f56c6c; background: #fef0f0; border-radius: 4px; padding: 8px 10px; font-size: 13px; }
 .muted { color: #999; font-size: 13px; }

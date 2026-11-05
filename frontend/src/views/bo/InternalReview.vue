@@ -572,14 +572,14 @@ onMounted(() => {
 .crumb h1 { margin: 0; font-size: 20px; }
 .layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
 .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); padding: 18px 20px; }
-.card h2 { margin: 0 0 14px; font-size: 15px; padding-left: 8px; border-left: 3px solid #409eff; }
+.card h2 { margin: 0 0 14px; font-size: 15px; padding-left: 8px; border-left: 3px solid var(--primary); }
 .order-list { list-style: none; margin: 0; padding: 0; }
 .order-list li { padding: 10px 8px; border-radius: 4px; cursor: pointer; border-bottom: 1px solid #f2f3f5; display: flex; flex-direction: column; gap: 2px; }
 .order-list li:hover { background: #f5f7fa; }
-.order-list li.active { background: #ecf5ff; }
+.order-list li.active { background: var(--primary-soft); }
 .customer { font-size: 13px; color: #606266; }
 .task-count { font-size: 12px; color: #909399; }
-.mono { font-family: Menlo, Consolas, monospace; color: #409eff; font-size: 13px; }
+.mono { font-family: Menlo, Consolas, monospace; color: var(--primary); font-size: 13px; }
 .order-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
 .task-block { margin-bottom: 18px; }
 .task-title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
@@ -615,11 +615,11 @@ onMounted(() => {
 .diff { background: #fff7e6; }
 .btn { padding: 8px 16px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 14px; }
 .btn.small { padding: 4px 10px; font-size: 13px; }
-.btn.primary { background: #409eff; border-color: #409eff; color: #fff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
 .btn.danger { background: #fff; border-color: #f56c6c; color: #f56c6c; }
 .btn.ghost { background: #fff; color: #606266; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.link { border: none; background: none; color: #409eff; cursor: pointer; padding: 0; font-size: 13px; text-decoration: underline; margin-right: 8px; }
+.link { border: none; background: none; color: var(--primary); cursor: pointer; padding: 0; font-size: 13px; text-decoration: underline; margin-right: 8px; }
 .err { color: #f56c6c; background: #fef0f0; border-radius: 4px; padding: 8px 10px; font-size: 13px; }
 .muted { color: #999; font-size: 13px; }
 .global-err { color: #f56c6c; background: #fef0f0; border-radius: 4px; padding: 10px; }

@@ -154,15 +154,15 @@ onMounted(load)
 .btn-row { display: flex; gap: 10px; margin-left: auto; }
 .btn { padding: 8px 16px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 14px; }
 .btn.small { padding: 6px 12px; font-size: 13px; }
-.btn.primary { background: #409eff; border-color: #409eff; color: #fff; }
-.btn.primary:hover:not(:disabled) { background: #66b1ff; }
-.btn.ghost:hover:not(:disabled) { color: #409eff; border-color: #c6e2ff; background: #ecf5ff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--primary-hover); }
+.btn.ghost:hover:not(:disabled) { color: var(--primary); border-color: var(--primary-border); background: var(--primary-soft); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .board { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: 14px; align-items: start; }
 .column { background: #fafbfc; border-radius: 8px; padding: 12px; min-height: 200px; border-top: 3px solid #909399; }
 .column.pending_confirm { border-top-color: #e6a23c; }
-.column.in_production { border-top-color: #409eff; }
+.column.in_production { border-top-color: var(--primary); }
 .column.completed { border-top-color: #67c23a; }
 .column.cancelled { border-top-color: #909399; }
 .col-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -172,7 +172,7 @@ onMounted(load)
 .kanban-card { background: #fff; border-radius: 6px; padding: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .kanban-card:hover { box-shadow: 0 2px 10px rgba(64,158,255,0.18); transform: translateY(-1px); }
 .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-.order-no { font-family: Menlo, Consolas, monospace; font-size: 12px; color: #409eff; }
+.order-no { font-family: Menlo, Consolas, monospace; font-size: 12px; color: var(--primary); }
 .customer { margin: 8px 0 2px; font-size: 14px; color: #303133; font-weight: 500; }
 .meta { margin-top: 8px; justify-content: flex-start; gap: 6px; }
 .pill { font-size: 11px; background: #f4f4f5; color: #606266; border-radius: 10px; padding: 2px 8px; }

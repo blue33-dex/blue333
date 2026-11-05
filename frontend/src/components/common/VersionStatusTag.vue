@@ -18,7 +18,7 @@ const labelMap: Record<string, string> = {
 
 const colorMap: Record<string, string> = {
   [VersionStatus.DRAFT]: '#909399',
-  [VersionStatus.PENDING_INTERNAL_REVIEW]: '#409eff',
+  [VersionStatus.PENDING_INTERNAL_REVIEW]: 'var(--primary)',
   [VersionStatus.RELEASED]: '#67c23a',
   [VersionStatus.IN_CLIENT_REVIEW]: '#e6a23c',
   [VersionStatus.CLIENT_CONFIRMED]: '#67c23a',

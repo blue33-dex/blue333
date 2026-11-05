@@ -16,7 +16,7 @@ const labelMap: Record<string, string> = {
 
 const colorMap: Record<string, string> = {
   [OrderStatus.PENDING_CONFIRM]: '#e6a23c',
-  [OrderStatus.IN_PRODUCTION]: '#409eff',
+  [OrderStatus.IN_PRODUCTION]: 'var(--primary)',
   [OrderStatus.COMPLETED]: '#67c23a',
   [OrderStatus.CANCELLED]: '#909399',
 }

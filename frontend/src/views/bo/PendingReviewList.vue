@@ -101,7 +101,7 @@ onMounted(load)
 .header-actions { display: flex; gap: 10px; }
 .btn { padding: 8px 16px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 14px; }
 .btn.ghost { color: #606266; }
-.btn.ghost:hover { color: #409eff; border-color: #c6e2ff; background: #ecf5ff; }
+.btn.ghost:hover { color: var(--primary); border-color: var(--primary-border); background: var(--primary-soft); }
 
 .card {
   background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
@@ -116,7 +116,7 @@ onMounted(load)
 .list-table tbody tr.clickable-row { cursor: pointer; transition: background 0.15s; }
 .list-table tbody tr.clickable-row:hover { background: #f5f7fa; }
 
-.mono { font-family: Menlo, Consolas, monospace; color: #409eff; }
+.mono { font-family: Menlo, Consolas, monospace; color: var(--primary); }
 .muted { color: #999; }
 .empty, .global-err { padding: 20px 0; text-align: center; color: #999; }
 .global-err { color: #f56c6c; background: #fef0f0; border-radius: 4px; padding: 10px; }

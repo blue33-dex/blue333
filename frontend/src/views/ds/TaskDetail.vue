@@ -282,10 +282,10 @@ onMounted(load)
 .crumb { display: flex; align-items: center; gap: 12px; }
 .crumb h1 { margin: 0; font-size: 20px; }
 .header-meta { display: flex; align-items: center; gap: 12px; }
-.mono { font-family: Menlo, Consolas, monospace; color: #409eff; font-size: 14px; }
+.mono { font-family: Menlo, Consolas, monospace; color: var(--primary); font-size: 14px; }
 
 .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); padding: 20px 24px; margin-bottom: 16px; }
-.card h2 { margin: 0 0 14px; font-size: 15px; padding-left: 8px; border-left: 3px solid #409eff; }
+.card h2 { margin: 0 0 14px; font-size: 15px; padding-left: 8px; border-left: 3px solid var(--primary); }
 
 .kv-grid { margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 24px; }
 .kv { display: flex; gap: 8px; }
@@ -304,11 +304,11 @@ onMounted(load)
 
 .btn { padding: 8px 16px; border-radius: 4px; border: 1px solid #dcdfe6; background: #fff; cursor: pointer; font-size: 14px; }
 .btn.small { padding: 6px 12px; font-size: 13px; }
-.btn.primary { background: #409eff; border-color: #409eff; color: #fff; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn.ghost { background: #fff; color: #606266; }
-.btn.ghost:hover:not(:disabled) { color: #409eff; border-color: #c6e2ff; background: #ecf5ff; }
-.link { border: none; background: none; color: #409eff; cursor: pointer; padding: 0; font-size: 13px; text-decoration: underline; }
+.btn.ghost:hover:not(:disabled) { color: var(--primary); border-color: var(--primary-border); background: var(--primary-soft); }
+.link { border: none; background: none; color: var(--primary); cursor: pointer; padding: 0; font-size: 13px; text-decoration: underline; }
 .link:disabled { color: #c0c4cc; cursor: not-allowed; }
 
 .attach-list { margin: 0; padding: 0; list-style: none; }

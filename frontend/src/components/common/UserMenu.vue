@@ -49,8 +49,8 @@ async function handleLogout() {
 .role-tag {
   padding: 2px 8px;
   border-radius: 10px;
-  background: #ecf5ff;
-  color: #409eff;
+  background: var(--primary-soft);
+  color: var(--primary);
   font-size: 12px;
 }
 .logout-btn {
@@ -62,6 +62,6 @@ async function handleLogout() {
   font-size: 13px;
   cursor: pointer;
 }
-.logout-btn:hover { border-color: #409eff; color: #409eff; }
+.logout-btn:hover { border-color: var(--primary); color: var(--primary); }
 .logout-btn:disabled { color: #c0c4cc; cursor: not-allowed; }
 </style>
