@@ -107,6 +107,7 @@
 | S-06 | GET | `/api/v1/material-tasks/{taskId}` | BO/DS 任务详情读取 | P1 |
 | S-07 | GET | `/api/v1/versions/{versionId}/download` | 下载鉴权：后端校验角色+数据可见性 → 生成限时 5min 预签名 GET URL → HTTP 302 | P2 |
 | S-08 | GET | `/api/v1/attachments/{attachmentId}/download` | 参考素材附件下载，同 S-07 鉴权逻辑 | P1 |
+| S-10 | POST | `/api/v1/auth/register` | 三端自助注册（姓名 / 用户名 / 密码 / 身份端），BCrypt 落库并绑定 `user_roles`；详见 `docs/01-requirements/AUTH_UI_API_DESIGN.md` | 增量 |
 
 ### 3.3 文件上传确认接口（补充）
 
