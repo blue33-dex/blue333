@@ -250,8 +250,8 @@ public class OrderController {
       @NotNull @JsonProperty("material_type") com.blue333.ordermgmt.domain.enums.MaterialType materialType,
       @NotBlank(message = "规格尺寸必填")
       @Size(max = 100, message = "规格尺寸不能超过 100 个字符")
-      @Pattern(regexp = "^[\\p{L}\\p{N}\\s/xX×÷*+\\-.,，（）()]+$",
-          message = "规格尺寸只能包含字母、数字、空格及 × * / - . 等符号")
+      @Pattern(regexp = "^(?:[A-Za-z]{1,2}\\d{1,3}|\\d+(?:\\.\\d+)?\\s*[A-Za-z\\u4e00-\\u9fa5]{1,6}(?:\\s*[xX×*/]\\s*\\d+(?:\\.\\d+)?\\s*[A-Za-z\\u4e00-\\u9fa5]{1,6})?)$",
+          message = "规格尺寸格式不正确，请使用 600mm*900mm 或 A4 这类写法")
       @JsonProperty("spec_size") String specSize) {}
   public record CreateOrderRequest(@NotBlank @JsonProperty("customer_name") String customerName, @NotBlank @JsonProperty("use_scene") String useScene, @NotNull @JsonProperty("delivery_deadline") LocalDate deliveryDeadline, @JsonProperty("remark") String remark, @NotNull @JsonProperty("material_specs") List<@Valid MaterialSpecRequest> materialSpecs) {}
   public record PresignAttachmentRequest(@NotBlank @JsonProperty("file_name") String fileName, @Positive @JsonProperty("file_size") long fileSize) {}

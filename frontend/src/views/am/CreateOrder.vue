@@ -73,9 +73,9 @@ function removeSpec(idx: number) {
   specErrors.value = next
 }
 
-/** 与后端 OrderController.MaterialSpecRequest 保持一致：1~100 字符，仅允许尺寸常用字符 */
+/** 与后端 OrderController.MaterialSpecRequest 保持一致：1~100 字符，双单位尺寸格式（如 600mm*900mm、A4、90cm） */
 const MAX_SPEC_SIZE_LENGTH = 100
-const SPEC_SIZE_PATTERN = /^[\p{L}\p{N}\s\/xX×÷*+\-.,，（）()]+$/u
+const SPEC_SIZE_PATTERN = /^(?:[A-Za-z]{1,2}\d{1,3}|\d+(?:\.\d+)?\s*[A-Za-z\u4e00-\u9fa5]{1,6}(?:\s*[xX×*\/]\s*\d+(?:\.\d+)?\s*[A-Za-z\u4e00-\u9fa5]{1,6})?)$/
 
 function validate(): boolean {
   errors.value = {}
@@ -105,7 +105,7 @@ function validate(): boolean {
     else if (specSize.length > MAX_SPEC_SIZE_LENGTH) {
       row.spec_size = `规格尺寸不能超过 ${MAX_SPEC_SIZE_LENGTH} 个字符`
     } else if (!SPEC_SIZE_PATTERN.test(specSize)) {
-      row.spec_size = '规格尺寸只能包含字母、数字、空格及 × * / - . 等符号'
+      row.spec_size = '规格尺寸格式不正确，请使用 600mm*900mm 或 A4 这类写法'
     }
     if (Object.keys(row).length) {
       specErrors.value[i] = row
@@ -252,7 +252,7 @@ const todayStr = computed(() => new Date().toISOString().slice(0, 10))
           </div>
           <div class="spec-cell size-cell">
             <label>规格尺寸 <em>*</em></label>
-            <input v-model="spec.spec_size" type="text" :maxlength="MAX_SPEC_SIZE_LENGTH" placeholder="如 600mm × 900mm" />
+            <input v-model="spec.spec_size" type="text" :maxlength="MAX_SPEC_SIZE_LENGTH" placeholder="如 600mm*900mm" />
             <small v-if="specErrors[i]?.spec_size" class="err">{{ specErrors[i].spec_size }}</small>
           </div>
           <div class="spec-cell action-cell">
